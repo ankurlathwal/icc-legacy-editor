@@ -1,5 +1,6 @@
 # Project Summary
-Decode the database files of the old game International Cricket Captain (ICC 2 (1999) / 2000 / 2002 / 2006) and provide a visual editor that saves back into the game's own format, so edited databases can be played in the game.
+Decode the database files of the old game International Cricket Captain (ICC 1998, ICC 2 (1999), 2000, 2001, 2002, 2006,
+plus Australian Cricket Captain (1998)) and provide a visual editor that saves back into the game's own format, so edited databases can be played in the game.
 
 # The database files
 Each game release uses a pair of files:
@@ -12,8 +13,9 @@ What is in the repo:
   - `Original DB/2000/` — ICC 2000 pair, edited by the user (Sehwag, Yuvraj Singh added; roles/names fixed) and verified in-game, + `.fxt`.
   - `Original DB/2006/` — ICC 2006 pair (edits verified in-game) + `Fxt/` (one fixture file per season 2005–2025).
   - `Original DB/1999/database.db` — ICC 2 (1999), a single unencrypted file (edits verified in-game). ICC 2 has no fixture files.
-- The game installs are NOT in the repo (copyright/size). On the user's Windows PC they are installed locally (an ICC 2006
-  install was seen at `C:\cricket\cricket`; ask the user for the others). Their DLLs are the reference for the file format:
+- The game installs are NOT in the repo (copyright/size). On the user's Windows PC they are under `C:\ICC\` (`1998`, `1999`, `2000`,
+  `2001`, `2002`, `2006`, `Australian Cricket Captain`). `C:\ICC\2002` is the Mac copy: its `DataP.db` is the
+  text-editor-damaged one (decrypted payload starts with `EF BF BD`) and its `dataT.db` the "2005 update"; use `Original DB/2002/`. Their DLLs are the reference for the file format:
   `CrManAndEng.dll`, `CrTypes.dll`, `CrickMan.dll`, `Global.dll` (ICC 2: `CrickMan.dll` + `CrTypes.dll`). Paths written below
   as `ICC 2000/...`, `ICC 2006/...`, `ICC2/...` mean "inside that game's install folder".
 
@@ -44,7 +46,26 @@ Known-bad / special files (seen in the user's ICC 2002 install on the Mac; check
   - abilities are unpacked 32-bit floats (names from getters, see `icc2file.FIELDS`); fixed 16/16/15 bat/bowl/field record blocks, each in its own slot order (`BAT_ORDER`/`BOWL_ORDER`/`FIELD_ORDER` → `RECORD_TYPES`), accessed via `get_record`/`set_record`; coaches are full CrPerson;
   - CrTeam holds squad/XI WORD lists, string-list history, two CrTeamRecords books (first-class, one-day), 84 fixed bytes (named in `icc2file.TEAM_FIXED`: roles, income, budgets, national flag...) and a 576-byte history block.
   - Editor: `python3 -m icc.editor --database ...` uses `icc/editor/icc2store.py` (same JSON API as `server.Store`).
-
+- ICC 2001: identical files to ICC 2000 (same layout and nationality table, checked in its `CrManAndEng.dll`), so it is
+  told apart only by `fix1.fxt`'s season year (2001); `server.Store` then sets `game_version = 2001`
+  (`NATIONAL_TABLES[2001]` = the 2000 table).
+- ICC 1998 (original International Cricket Captain) and Australian Cricket Captain (1998), both the ICC 1 engine —
+  `icc/accfile.py` (`accfile.ICC1`, `accfile.ACC` Format objects; `accfile.parse` detects which), from their
+  `CrickMan.dll` + `CrTypes.dll` (MFC42). ICC 1998 differs from ACC only in: 10 bat/bowl + 9 field records (no
+  'First-class only', no Second XI), Championship/Sunday League history as DWORD arrays, colour stored after the first
+  8 team-value bytes, no default team size (60 value bytes) and a 216-byte history block (18 x 3 DWORDs). ACC details:
+  - same outline as ICC 2 (`database.db`: CrTeamNames + CrDbase of CrBowler / CrCoach / CrGround / CrTeam, unencrypted);
+  - CrPerson: as ICC 2 up to nationality, then morale + loyalty (doubles), contract length, 3 wage floats; no notes string;
+  - abilities are 64-bit doubles at fixed byte offsets of `ptail` (276 bytes) / `btail` (196) (`accfile.FIELDS`);
+  - career records: 13 bat + 13 bowl (8 DWORDs each) + 11 field; best bowling is runs then wickets (Warne 8/71) even though
+    the DLL setter names say the opposite;
+  - CrTeam: ground/squad/XI lists, CrCountry (28 bytes), 2 more player-key lists, history, colour, 64 fixed bytes
+    (`accfile.TEAM_FIXED`), 576-byte history; no club record books; grounds have 24 bytes of conditions;
+  - editor: `icc2store.ACCStore` (subclass of `ICC2Store`, `F` = the detected Format; `open_database` picks ICC 2 or ICC 1);
+  - fixtures `eng98.fxt` (1998) / `aus1998.fxt` / `ausX.fxt` (ACC): `icc/fixture1file.py`, see below;
+  - the game refuses to start on Windows 10 with "requires ... 'Small Fonts'": `cricket.exe` reads
+    `HKEY_CURRENT_CONFIG\Display\Settings` `DPILogicalX` (a Win9x value) and wants "96"; creating it (admin) fixes it
+    (user confirmed). In the Help guide's troubleshooting.
 - Fixtures (`*.fxt`, ICC 2000/2002/2006) — `icc/fixturefile.py`, from `CrEventList::serializeFixtures`, `CrDay`, `CrFixture`,
   `CrResult` (CrickMan.dll) and `CrMatchType` (CrTypes.dll). Plain (unencrypted) CArchive:
   - 365 CrDay (WORD day, DWORD count, CrFixture objects; a multi-day match is written once and referenced on its later days,
@@ -65,6 +86,25 @@ Known-bad / special files (seen in the user's ICC 2002 install on the Mac; check
     adding such internationals (`fixtures.check_international`); `mp.fxt` has odd existing entries, so only changes are checked.
   - Order inside each day is the game's compile order; `fixturefile` recovers one global order (topological sort) so files
     round-trip exactly; `serialize` regenerates the days from each fixture's start + length.
+- Fixtures of ICC 1998 / ACC (ICC 1 engine) — `icc/fixture1file.py`, from `CrEventList::Serialize`, `CrDay`, `CrFixture`
+  (CrickMan.dll) and `CrMatchType` (CrTypes.dll); plain CArchive, a different layout from `fixturefile`:
+  - 365 CrDay = DWORD count + 30 WriteObject slots (null tags pad). A match is written in full on its first day; each later
+    day gets its own small CrFixture (all -1 / 0xCDCD, first=0, last-day flag, day-in-match) referencing the first-day one.
+  - CrFixture: CrMatchType (DWORD type, round, out_of; ACC + DWORD day/night + CString = ODI Tournament number), DWORD home,
+    away (ACC + WORD ground = team id), start, first, last (1 for one-day matches, else 0xCDCD), day-in-match, 3 objects.
+  - Tail: 9 CrCountry (28 bytes), 150 team-name CStrings, 4x6 DWORDs, rotation table (12 columns, column 0 = this file's
+    season; 1998 22 rows, ACC 28), ACC 5x5 DWORDs, then 1998 5+4+5 / ACC 4 DWORDs (year = 1998 tables[-4], ACC tables[-3]).
+  - Teams: slot < 101 = position in the name table (1998: id = pos + 1; ACC table starts empty, pos = id); 101+ = rotation
+    slot (entries are name-table positions); ACC 0 / 900+ and 1998 unnamed positions = knockout placeholders.
+  - Match types: 1998 file codes 0 Test, 1 ODI, 2 Championship, 3 Sunday League, 4 "League Cup" (B&H), 5 NatWest, translated to
+    the editor's ICC 2000 codes (`TYPES_1998`); ACC's codes already match (0 Sheffield Shield, 1 Mercantile Mutual Cup,
+    4 World Cup, 5 ODI Tournament, 6 Test, 7 ODI, 8/9 friendlies, 10 Club Cricket). Day 1 = 1 April (1998) / 1 October (ACC),
+    checked against real 1998 / 1998-99 dates.
+  - Editor: `fixtures.load_fixture_file` falls back to `fixture1file`; same FixtureFile interface plus `slot_entries`,
+    `set_slot` (rotation only) and `venue_editable` / `has_day_night` / `has_tt`. The "home side needs a ground" check is
+    skipped for these games (their national sides have no grounds; Test venue rules not decoded).
+- ICC 2 (1999) has no fixture files: its fixtures are text resources (type "FIXTURES", ids 0x93/0x94...) inside `Cricket2.exe`,
+  read via `AMainWin::convertResourceToFile` + `CrEventList::readInText`. Editing them would mean patching the exe (not done).
   - The game's original *text* fixture sources (with format comments) are embedded in `ICC 2000/CrickMan.dll` around
     file offsets 0x4da00–0x635e5 (in the install) — useful reference for slot meanings.
 
@@ -88,8 +128,10 @@ Known-bad / special files (seen in the user's ICC 2002 install on the Mac; check
 - `icc/teamfile.py` — team file: teams, grounds, club records.
 - `icc/playerfile.py` — player file: players (with `BITFIELDS` table), career records, teams/squads/XI, coaches; add/remove/move players keeping squads consistent.
 - `icc/icc2file.py` — ICC 2 (1999) single-file database.
-- `icc/fixturefile.py` — fixture files (`*.fxt`); `icc/editor/fixtures.py` — fixture editing + venue resolution for the editor.
-- `icc/editor/` — local web editor (stdlib `http.server` + single-page `static/index.html`); `server.Store` for 2000/2002/2006, `icc2store.ICC2Store` for ICC 2.
+- `icc/accfile.py` — ICC 1998 / Australian Cricket Captain single-file database (reuses `icc2file` building blocks).
+- `icc/fixturefile.py` — fixture files (`*.fxt`, ICC 2000-2006); `icc/fixture1file.py` — ICC 1998 / ACC fixture files;
+  `icc/editor/fixtures.py` — fixture editing + venue resolution for the editor (`FixtureStoreMixin` for both store kinds).
+- `icc/editor/` — local web editor (stdlib `http.server` + single-page `static/index.html`); `server.Store` for 2000/2002/2006, `icc2store.ICC2Store` for ICC 2 (`ACCStore` for ICC 1998 / ACC).
 - Desktop packages (the user runs the editor as an app on Windows against the game installs, and on the Mac):
   - `tools/build_windows.py` → `dist/ICC-Editor-Windows.zip`: embeddable Python 3.13 (cached in `dist/.cache`) + `icc/` +
     `ICC Editor.exe` (C launcher `tools/winlauncher/launcher.c` cross-compiled with Zig — GUI subsystem via
@@ -131,10 +173,13 @@ Known-bad / special files (seen in the user's ICC 2002 install on the Mac; check
 # Still undecoded (kept raw, round-trips safely)
 - 2000/2002/2006: CrForm (recent form), CrInternationalRating, 5-byte block + 2 lead bytes in each team-file record book,
   one WORD per CrBowlRecord (probably maidens).
+- ACC: the 16-double / 32-DWORD tables at the start of ptail/btail, a few ptail/btail values, CrCountry, CrInjType, the
+  8th DWORD of each bowling record, team lists 3/4 meaning, fixtures.
 - ICC 2: one unknown DWORD per batting/bowling record entry, record-block trailer DWORDs, CrForm, CrInjType,
   Team.fixed `unknown_10`/`unknown_money`/`unknown_72`, ground pitch/weather blocks.
 - Fixtures: the 18-DWORD county table, the extra tail DWORDs, CrFixture flag bit, rotation/tri-series tables (shown nowhere
-  in the editor yet). Edited fixture files have NOT been tested in-game yet.
+  in the editor yet). ICC 1998 / ACC: CrCountry blocks, the 4x6 table, trailing values, how Tests pick a venue.
+  Edited fixture files have NOT been tested in-game yet (any game).
 - New player keys are max+1; proven fine in-game for ICC 2000.
 
 # Conventions
@@ -152,6 +197,7 @@ Known-bad / special files (seen in the user's ICC 2002 install on the Mac; check
 - After browser checks, close test tabs; clear `window.onbeforeunload` first or closing hangs on "Leave site?".
 - Edited databases have been verified in the real game for ICC 2 (1999), ICC 2000 (including newly added players) and
   ICC 2006. ICC 2002 shares the 2000 layout but has not been tested in-game separately.
+  ICC 1998, ICC 2001 and Australian Cricket Captain edits have NOT been tested in-game yet.
 - The user runs the in-game tests (on Windows); never claim an in-game result that the user hasn't reported.
 - Rebuild the Windows package (`python tools/build_windows.py`) after editor changes; the user shares it with the community.
 

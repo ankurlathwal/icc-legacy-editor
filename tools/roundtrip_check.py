@@ -12,7 +12,7 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
 
-from icc import fixturefile, icc2file, playerfile, teamfile  # noqa: E402
+from icc import accfile, fixture1file, fixturefile, icc2file, playerfile, teamfile  # noqa: E402
 from icc.crypto import read_db  # noqa: E402
 
 
@@ -29,9 +29,15 @@ def check(path, kind):
         return teamfile.serialize(tf) == read_db(path, tf.seed_with_length)
     with open(path, 'rb') as f:
         data = f.read()
-    if kind == 'icc2':
-        return icc2file.serialize(icc2file.parse(data) if hasattr(icc2file, 'parse') else icc2file.load(path)) == data
-    return fixturefile.serialize(fixturefile.parse(data)) == data
+    if kind == 'icc2':   # ICC 2 (1999), or ICC 1998 / Australian Cricket Captain
+        try:
+            return icc2file.serialize(icc2file.parse(data)) == data
+        except (ValueError, EOFError):
+            return accfile.serialize(accfile.parse(data)) == data
+    try:
+        return fixturefile.serialize(fixturefile.parse(data)) == data
+    except (ValueError, EOFError):   # ICC 1998 / Australian Cricket Captain fixtures
+        return fixture1file.serialize(fixture1file.parse(data)) == data
 
 
 def main(argv):

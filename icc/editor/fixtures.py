@@ -1,10 +1,11 @@
-"""Fixture (*.fxt) editing for the web editor (ICC 2000 / 2002 / 2006)."""
+"""Fixture (*.fxt) editing for the web editor (ICC 2000 / 2001 / 2002 / 2006 via fixturefile; ICC 1998 and
+Australian Cricket Captain via fixture1file, which offers the same interface)."""
 import datetime
 import os
 import shutil
 from pathlib import Path
 
-from .. import fixturefile
+from .. import fixture1file, fixturefile
 
 
 class SaveError(Exception):
@@ -39,7 +40,23 @@ ENGLAND = 44   # team id the game hard-codes for neutral finals (played at its 2
 # CrTeam::isTestTeam hard-codes the Test nations as team ids 43..51 (ICC 2000/2002: 9 sides) or 43..52
 # (ICC 2006 adds Bangladesh as 52). Internationals involving anyone else crash at match start
 # ("an invalid argument was encountered"); Associates only appear in World Cup fixtures.
-INTERNATIONAL_TYPES = {'classic': {5, 6, 7}, '2006': {5, 6, 7, 12}}
+# ICC 1998 / ACC (fixture1file) use the same editor codes; the same limit is assumed there.
+INTERNATIONAL_TYPES = {'classic': {5, 6, 7}, '2006': {5, 6, 7, 12}, '1998': {6, 7}, 'acc': {5, 6, 7}}
+
+
+def _module(ff):
+    return fixture1file if isinstance(ff, fixture1file.FixtureFile) else fixturefile
+
+
+def load_fixture_file(path):
+    """An ICC 2000-2006 fixture file, or failing that an ICC 1998 / ACC one."""
+    try:
+        return fixturefile.load(path)
+    except (ValueError, EOFError) as e:
+        try:
+            return fixture1file.load(path)
+        except (ValueError, EOFError, UnicodeDecodeError):
+            raise e
 
 
 def test_nations(ff):
@@ -76,8 +93,8 @@ def resolve_venue(ff, f, info):
         return None
     lst = grounds.get(tid) or []
     rnd = _signed(f.round)
-    if tid not in test_nations and rnd == 0:
-        lst, idx = grounds.get(ENGLAND) or [], 1          # domestic cup final
+    if tid not in test_nations and rnd == 0 and ff.fmt != 'acc':
+        lst, idx = grounds.get(ENGLAND) or [], 1          # domestic cup final (English games)
     elif f.type == 5 and tid == ENGLAND and f.home >= 900:
         idx = 1                                            # triangular final in England
     elif f.type == 5:
@@ -93,7 +110,8 @@ def resolve_venue(ff, f, info):
 class FixtureSet:
     def __init__(self, folder):
         self.folder = Path(folder)
-        self.files = {p.name: fixturefile.load(p) for p in sorted(self.folder.glob('*.fxt'), key=lambda p: p.name.lower())}
+        self.files = {p.name: load_fixture_file(p)
+                      for p in sorted(self.folder.glob('*.fxt'), key=lambda p: p.name.lower())}
         self.dirty = set()
 
     def get(self, name):
@@ -127,11 +145,19 @@ class FixtureSet:
 
     def file_json(self, name, names):
         ff = self.get(name)
-        slots = [{'slot': s, 'team': t, 'name': names.get(t, '#%d' % t), 'group': slot_group(s)}
-                 for s, t in enumerate(ff.keys) if t not in (0xCDCD, 0xFFFF) and s > 0]
+        if hasattr(ff, 'slot_entries'):     # ICC 1998 / ACC: teams by name (fixed) + rotation slots
+            slots = [{'slot': s, 'team': t, 'name': names.get(t, '#%d' % t), 'group': g, 'fixed': fixed}
+                     for s, t, g, fixed in ff.slot_entries()]
+        else:
+            slots = [{'slot': s, 'team': t, 'name': names.get(t, '#%d' % t), 'group': slot_group(s), 'fixed': False}
+                     for s, t in enumerate(ff.keys) if t not in (0xCDCD, 0xFFFF) and s > 0]
+        mod = _module(ff)
         return {
-            'name': name, 'year': ff.year if 1800 < ff.year < 2100 else None,
-            'season_start': ff.date_of(1).isoformat(), 'season_end': ff.date_of(fixturefile.DAYS_PER_FILE - 1).isoformat(),
+            'name': name, 'year': ff.year if 1800 < ff.year < 2100 else None, 'fmt': ff.fmt,
+            # which fields this game's fixtures store (ICC 1998 has no venue, day/night or tournament no.)
+            'venue_editable': getattr(ff, 'venue_editable', True), 'day_night': getattr(ff, 'has_day_night', True),
+            'tt': getattr(ff, 'has_tt', True),
+            'season_start': ff.date_of(1).isoformat(), 'season_end': ff.date_of(mod.DAYS_PER_FILE - 1).isoformat(),
             'match_types': {str(k): {'name': v[0], 'days': v[1]} for k, v in ff.match_types.items()},
             'slots': slots, 'key_size': len(ff.keys),
             # what the venue field holds: a team id (play at its ground) or, in ICC 2006, a ground id
@@ -151,12 +177,18 @@ class FixtureSet:
             if k in data:
                 setattr(f, k, int(data[k]))
         if 'day_night' in data:
-            f.day_night = 1 if data['day_night'] else 0
+            f.day_night = 1 if data['day_night'] and getattr(ff, 'has_day_night', True) else 0
+        if not getattr(ff, 'venue_editable', True):
+            f.ground = 0
+        if not getattr(ff, 'has_tt', True):
+            f.tt = 255
         # Slot 0 and codes past the key (850+ Super Six, 900+ cup draw positions) are
-        # placeholders the game fills in as a competition progresses.
+        # placeholders the game fills in as a competition progresses. (ICC 1998 / ACC use unnamed
+        # slots as knockout placeholders too, so only the ICC 2000-2006 key is checked.)
+        classic = ff.fmt in ('classic', '2006')
         for k in ('home', 'away'):
             slot = getattr(f, k)
-            if 0 < slot < len(ff.keys) and ff.team_id(slot) is None:
+            if classic and 0 < slot < len(ff.keys) and ff.team_id(slot) is None:
                 raise ValueError('key slot %d has no team' % slot)
         if f.home == f.away and ff.team_id(f.home) is not None:
             raise ValueError('a team cannot play itself')
@@ -164,8 +196,10 @@ class FixtureSet:
             raise ValueError('unknown competition')
         ff.check(f)
         # The game crashes starting a match it can't find a ground for (e.g. Kenya at home in ICC 2006,
-        # where Kenya has no grounds), so insist on an explicit venue in that case.
-        if ff.team_id(f.home) is not None and self.venue_info['team_grounds'] and \
+        # where Kenya has no grounds), so insist on an explicit venue in that case. (ICC 1998 / ACC
+        # national sides have no grounds in the database and how those games place Tests is not
+        # decoded, so the check is left out there.)
+        if classic and ff.team_id(f.home) is not None and self.venue_info['team_grounds'] and \
                 resolve_venue(ff, f, self.venue_info) is None:
             raise ValueError('the home side has no home ground in this database; choose a venue')
 
@@ -185,7 +219,7 @@ class FixtureSet:
 
     def add(self, name, data, names):
         ff = self.get(name)
-        f = fixturefile.new_fixture(0, 1, 0, 0)
+        f = fixture1file.new_fixture(ff, 0, 1, 0, 0) if _module(ff) is fixture1file else fixturefile.new_fixture(0, 1, 0, 0)
         self._apply(ff, f, data)
         check_international(ff, f)
         ff.fixtures.append(f)
@@ -200,6 +234,11 @@ class FixtureSet:
 
     def update_keys(self, name, data):
         ff = self.get(name)
+        if hasattr(ff, 'set_slot'):         # ICC 1998 / ACC: only rotation slots
+            for s, t in data.items():
+                ff.set_slot(int(s), int(t))
+            self.dirty.add(name)
+            return {'ok': True}
         for s, t in data.items():
             s, t = int(s), int(t)
             if not 0 < s < len(ff.keys):
@@ -218,8 +257,9 @@ class FixtureSet:
         out = []
         for name in sorted(self.dirty):
             ff = self.files[name]
-            data = fixturefile.serialize(ff)
-            if fixturefile.serialize(fixturefile.parse(data)) != data:
+            mod = _module(ff)
+            data = mod.serialize(ff)
+            if mod.serialize(mod.parse(data, ff.fmt) if mod is fixture1file else mod.parse(data)) != data:
                 raise SaveError('re-read check failed for %s' % name)
             out.append((ff.path, data))
         return out
@@ -239,3 +279,42 @@ class FixtureSet:
                 raise SaveError('%s on disk does not match after saving; restore from its backup' % path.name)
         self.dirty.clear()
         return [str(p) for p, _ in out], backups
+
+
+class FixtureStoreMixin:
+    """Fixture endpoints shared by the editor stores. A store sets `self.fx` (a FixtureSet or None)
+    and provides team_names(), _venue_info() and a `dirty` flag."""
+
+    def fixtures(self):
+        if not self.fx:
+            raise KeyError('no fixture files loaded')
+        return self.fx
+
+    def fixture_files(self):
+        return self.fixtures().list()
+
+    def fixture_file(self, name):
+        self.fixtures().venue_info = self._venue_info()
+        return self.fixtures().file_json(name, self.team_names())
+
+    def update_fixture(self, name, i, data):
+        self.fixtures().venue_info = self._venue_info()
+        r = self.fixtures().update(name, i, data, self.team_names())
+        self.dirty = True
+        return r
+
+    def add_fixture(self, name, data):
+        self.fixtures().venue_info = self._venue_info()
+        r = self.fixtures().add(name, data, self.team_names())
+        self.dirty = True
+        return r
+
+    def delete_fixture(self, name, i):
+        r = self.fixtures().delete(name, i)
+        self.dirty = True
+        return r
+
+    def update_fixture_keys(self, name, data):
+        r = self.fixtures().update_keys(name, data)
+        self.dirty = True
+        return r

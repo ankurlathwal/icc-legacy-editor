@@ -67,6 +67,7 @@ NATIONAL_TABLES = {
     2002: {0: None, 1: 75, 2: 43, 3: 44, 4: 45, 5: 46, 6: 47, 7: 48, 8: 49, 9: 50,
            10: 51, 11: 21, 12: 70, 13: 76, 14: 78, 15: 77},
 }
+NATIONAL_TABLES[2001] = NATIONAL_TABLES[2000]   # ICC 2001's getNationalTeamRef is ICC 2000's
 NATIONAL_TEAMS = NATIONAL_TABLES[2002]
 
 OLE_EPOCH = datetime.date(1899, 12, 30)
@@ -535,9 +536,10 @@ class PlayerFile:
 
     @property
     def game_version(self):
-        """2000 or 2002. The player layout is identical; only the nationality codes differ.
-        ICC 2002 databases have national sides for Namibia/Canada/Netherlands and/or
-        players using their codes; ICC 2000 databases have neither."""
+        """2000 or 2002 (2001 when set). The player layout is identical; only the nationality codes
+        differ. ICC 2002 databases have national sides for Namibia/Canada/Netherlands and/or
+        players using their codes; ICC 2000 databases have neither. ICC 2001 uses ICC 2000's codes,
+        so it cannot be told apart from the player file (the editor uses the fixtures' year)."""
         if self.fmt is FORMAT_2006:
             return 2006
         if getattr(self, '_version', None):

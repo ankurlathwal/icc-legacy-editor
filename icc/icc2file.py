@@ -219,6 +219,7 @@ FIELDS_BY_NAME = {f.name: f for f in FIELDS}
 BOWLER_TYPES = {0: 'Finger spin (off spin / slow left-arm)', 1: 'Wrist spin (leg spin)', 2: 'Medium',
                 3: 'Medium-fast', 4: 'Fast-medium', 5: 'Fast'}
 BAT_TYPES = {0: 'Opener', 1: 'Middle order', 2: 'All-rounder', 3: 'Tail-ender'}
+WAGES = ('wage', 'expected_wage', 'minimum_wage')
 
 
 @dataclass
@@ -266,6 +267,13 @@ class Player:
 
     def set_money(self, i, v):
         self.person.values[i] = to_f32(v)
+
+    # wages by name ('wage', 'expected_wage', 'minimum_wage' = Person.values 3..5)
+    def wage(self, kind):
+        return self.money(3 + WAGES.index(kind))
+
+    def set_wage(self, kind, v):
+        self.set_money(3 + WAGES.index(kind), v)
 
 
 def _read_player(r, key):
@@ -390,6 +398,9 @@ class Team:
     records: List[RecordBook]   # [first-class, one-day]
     fixed: bytes                # 84 bytes of team values (name ref, founded, budgets...)
     test_history: bytes         # 576 bytes
+
+    def has_value(self, name):
+        return name in TEAM_FIXED_BY_NAME
 
     def value(self, name):
         off, t = TEAM_FIXED_BY_NAME[name]

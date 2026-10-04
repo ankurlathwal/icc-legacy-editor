@@ -179,11 +179,13 @@ async function boot() {
   META = await api('meta');
   if (META.needs_folder) return renderChooser(META);
   $('#switchgame').hidden = !META.app;
-  $('#apptitle').textContent = `ICC ${META.game_version} Editor`; document.title = `ICC ${META.game_version} Editor`;
+  const title = META.title || `ICC ${META.game_version} Editor`;
+  $('#apptitle').textContent = title; document.title = title;
   TEAMS = await api('teams');
   PLAYERS = await api('players');
   setDirty(META.dirty);
   $('#tabs [data-tab=fixtures]').hidden = !META.fixtures_dir;
+  $('#tabs [data-tab=records]').hidden = META.club_records === false;
   render();
 }
 
@@ -236,8 +238,8 @@ function renderChooser(info) {
   m.innerHTML = `<div class="detail" style="max-width:760px;margin:0 auto;width:100%">
     <h2>Open a game</h2>
     <div class="banner">New here? <a href="#" id="chooserHelp">Read the short guide</a> — it covers everything from opening a game to playing your edits.</div>
-    <div class="meta">Choose an ICC game folder (ICC 2, 2000, 2002 or 2006) or a folder holding its databases.
-      The editor finds dataT.db / DataP.db (or ICC 2's database.db) and the fixture files by itself.</div>
+    <div class="meta">Choose an ICC game folder (ICC 1998, Australian Cricket Captain, ICC 2, 2000, 2001, 2002 or 2006) or a folder holding its databases.
+      The editor finds dataT.db / DataP.db (or the single database.db of the older games) and the fixture files by itself.</div>
     <section class="card"><div class="actions" style="margin:0"><button class="primary" id="pick">Choose game folder…</button>
       <span class="note" id="chooserNote"></span></div>
       <div class="actions"><input id="pathIn" placeholder="…or type / paste a folder path" style="flex:1"><button class="ghost" id="pathGo">Open</button></div>
@@ -429,12 +431,12 @@ async function showPlayer(i) {
       <label class="f">Expected wage (£)<input id="expected_wage" type="number" step="500" min="0" value="${p.expected_wage}"></label>
       <label class="f">Minimum wage (£)<input id="minimum_wage" type="number" step="500" min="0" value="${p.minimum_wage}"></label>
     </div>
-    <label class="f" style="margin-top:10px">Notes<textarea id="notes">${esc(p.notes)}</textarea></label></section>
-    ${groups.map(([g, title, extra]) => `<section class="card"><h3>${title}</h3><div class="grid">${floatAbility(g, p)}${[...(byGroup[g] || []), ...((extra || []).flatMap(x => byGroup[x] || []))].map(f => fieldInput(f, p.fields[f.name])).join('')}</div></section>`).join('')}
+    ${p.notes === null ? '' : `<label class="f" style="margin-top:10px">Notes<textarea id="notes">${esc(p.notes)}</textarea></label>`}</section>
+    ${groups.map(([g, title, extra]) => { const inner = floatAbility(g, p) + [...(byGroup[g] || []), ...((extra || []).flatMap(x => byGroup[x] || []))].map(f => fieldInput(f, p.fields[f.name])).join(''); return inner ? `<section class="card"><h3>${title}</h3><div class="grid">${inner}</div></section>` : ''; }).join('')}
     </div>
     <div class="ptab" data-ptab="stats">
-    ${META.career_records === false ? '' : recordTable('Batting & fielding records', 'bat', p.batting_records, ['matches','innings','not_outs','runs','highest','highest_not_out','centuries','fifties','balls','caught','stumped','debut'])}
-    ${META.career_records === false ? '' : recordTable('Bowling records', 'bowl', p.bowling_records, ['balls','runs','wickets','best_wickets','best_runs','five_wickets','ten_wickets'])}
+    ${META.career_records === false ? '' : recordTable('Batting & fielding records', 'bat', p.batting_records, META.bat_columns || ['matches','innings','not_outs','runs','highest','highest_not_out','centuries','fifties','balls','caught','stumped','debut'])}
+    ${META.career_records === false ? '' : recordTable('Bowling records', 'bowl', p.bowling_records, META.bowl_columns || ['balls','runs','wickets','best_wickets','best_runs','five_wickets','ten_wickets'])}
     </div>
     <div class="actions actionbar"><button class="primary" id="apply">Apply changes</button><button class="ghost" id="revert">Revert</button><span class="note" id="dirtynote"></span><span class="spacer"></span><button class="ghost danger" id="delp">Delete player</button></div>`;
 
@@ -460,7 +462,7 @@ async function showPlayer(i) {
   };
   $('#apply').onclick = () => applying($('#apply'), async () => {
     const body = { fields: {} };
-    ['first_name', 'surname', 'initials', 'notes', 'birthday', 'team', 'nationality', 'wage', 'expected_wage', 'minimum_wage'].forEach(k => body[k] = $('#' + k).value);
+    ['first_name', 'surname', 'initials', 'notes', 'birthday', 'team', 'nationality', 'wage', 'expected_wage', 'minimum_wage'].forEach(k => { if ($('#' + k)) body[k] = $('#' + k).value; });
     if (META.float_abilities) { body.batting_value = +$('#batting_value').value; body.bowling_value = +$('#bowling_value').value; body.england_contracted = $('#england_contracted').checked; }
     META.fields.forEach(f => { const el = $('#f_' + f.name); body.fields[f.name] = f.max === 1 ? (el.checked ? 1 : 0) : +el.value; });
     if (META.career_records !== false) { body.batting_records = readRecords(d, 'bat'); body.bowling_records = readRecords(d, 'bowl'); }
@@ -718,7 +720,7 @@ async function renderFixtures(m) {
       const head = mo !== month ? `<div class="row" style="cursor:default;background:var(--bg)"><b>${(month = mo)}</b></div>` : '';
       return head + `<div class="row ${f.index === FLIST.sel ? 'on' : ''}" data-i="${f.index}">
         <div>${fixtureTitle(f)}${f.day_night ? ' <span class="sub">(D/N)</span>' : ''}</div><div class="nums">${fmtDate(f.date).replace(/ \d{4}$/, '')}</div>
-        <div class="sub">${esc(f.competition)}${compDetail(f) ? ' · ' + esc(compDetail(f)) : ''}${f.plays_at ? ' · ' + esc(f.plays_at) : f.home_team ? ' · <b style="color:var(--warn)">no ground — set a venue</b>' : ''}</div></div>`;
+        <div class="sub">${esc(f.competition)}${compDetail(f) ? ' · ' + esc(compDetail(f)) : ''}${f.plays_at ? ' · ' + esc(f.plays_at) : f.home_team && !['1998', 'acc'].includes(FX.fmt) ? ' · <b style="color:var(--warn)">no ground — set a venue</b>' : ''}</div></div>`;
     }).join('') || '<div class="empty">No fixtures match</div>';
     list.scrollTop = FLIST.scroll;
     list.querySelectorAll('.row[data-i]').forEach(r => r.onclick = () => {
@@ -759,23 +761,27 @@ function showFixture(i) {
       <label class="f">Competition<select id="fx_type">${Object.entries(FX.match_types).map(([k, t]) => `<option value="${k}" ${+k === f.type ? 'selected' : ''}>${esc(t.name)} (${t.days} day${t.days > 1 ? 's' : ''})</option>`).join('')}</select></label>
       <label class="f">Home side<select id="fx_home">${slotOptions(f.home)}</select></label>
       <label class="f">Away side<select id="fx_away">${slotOptions(f.away)}</select></label>
-      <label class="f">Venue<select id="fx_ground"><option value="0">Home side's ground</option>${FX.venues.map(v => `<option value="${v.id}" ${v.id === f.ground ? 'selected' : ''}>${esc(v.name)}</option>`).join('')}${f.ground && !FX.venues.some(v => v.id === f.ground) ? `<option value="${f.ground}" selected>#${f.ground}</option>` : ''}</select></label>
-      <label class="chk"><input type="checkbox" id="fx_dn" ${f.day_night ? 'checked' : ''}> Day/night match</label>
+      ${FX.venue_editable === false ? '' : `<label class="f">Venue<select id="fx_ground"><option value="0">Home side's ground</option>${FX.venues.map(v => `<option value="${v.id}" ${v.id === f.ground ? 'selected' : ''}>${esc(v.name)}</option>`).join('')}${f.ground && !FX.venues.some(v => v.id === f.ground) ? `<option value="${f.ground}" selected>#${f.ground}</option>` : ''}</select></label>`}
+      ${FX.day_night === false ? '' : `<label class="chk"><input type="checkbox" id="fx_dn" ${f.day_night ? 'checked' : ''}> Day/night match</label>`}
     </div></section>
     <section class="card"><h3>Series &amp; round</h3><div class="grid">
       ${num('fx_round', f.round, 'Round / division / match no.')}
       ${num('fx_out_of', f.out_of, 'Series length')}
-      ${num('fx_tt', f.tt, 'Tournament no. (triangular series)')}
+      ${FX.tt === false ? '' : num('fx_tt', f.tt, 'Tournament no. (triangular series)')}
     </div><p class="note">Leagues: division 101 = Division 1, 102 = Division 2. Cups: 0 = final, 1 = semi-final, 2 = quarter-final, 3 = round 2, 4 = round 1.
       Tests and ODIs: match number and series length (e.g. 2 of 3). Leave blank when not used.</p></section>
-    <p class="note">Teams are chosen by fixture-key slot. The same county can sit in a Championship slot and a National League slot; pick the slot for this competition.
+    <p class="note">${['1998', 'acc'].includes(FX.fmt)
+      ? `Domestic teams are chosen by name. International sides can also be chosen by rotation slot (101 and up): the team shown is this season's, and the game moves the slots on in later seasons.
+        ${FX.venue_editable === false ? 'The game plays each match at the home side\'s ground; a Test nation hosting the 2nd match of a series uses its 2nd ground, and so on.' : 'Venue “Home side\'s ground”: the home side\'s first ground; a Test nation hosting the 2nd match of a series uses its 2nd ground, and so on.'}`
+      : `Teams are chosen by fixture-key slot. The same county can sit in a Championship slot and a National League slot; pick the slot for this competition.
       International rotation slots change from season to season, so the team shown is this season's.
-      Venue “Home side's ground”: the game uses the home side's first ground; a Test nation hosting the 2nd match of a series uses its 2nd ground, and so on; domestic cup finals go to Lord's.</p>
+      Venue “Home side's ground”: the game uses the home side's first ground; a Test nation hosting the 2nd match of a series uses its 2nd ground, and so on; domestic cup finals go to Lord's.`}</p>
     <div class="actions actionbar"><button class="primary" id="fxapply">${isNew ? 'Add fixture' : 'Apply changes'}</button>${isNew ? '' : '<button class="ghost" id="fxrevert">Revert</button><button class="ghost" id="fxcopy">Duplicate</button>'}<span class="note" id="fxnote"></span><span class="spacer"></span>${isNew ? '' : '<button class="ghost danger" id="fxdel">Delete fixture</button>'}</div>`;
   d.oninput = d.onchange = () => { pending = true; $('#fxnote').textContent = isNew ? '' : 'Not applied yet'; };
   const opt = id => { const v = $('#' + id).value; return v === '' ? 255 : +v; };
   const body = () => ({ date: $('#fx_date').value, type: +$('#fx_type').value, home: +$('#fx_home').value, away: +$('#fx_away').value,
-    ground: +$('#fx_ground').value, day_night: $('#fx_dn').checked, round: opt('fx_round'), out_of: opt('fx_out_of'), tt: opt('fx_tt') });
+    ground: $('#fx_ground') ? +$('#fx_ground').value : 0, day_night: $('#fx_dn') ? $('#fx_dn').checked : false,
+    round: opt('fx_round'), out_of: opt('fx_out_of'), tt: $('#fx_tt') ? opt('fx_tt') : 255 });
   const after = async sel => {
     pending = false; setDirty(true);
     FX = { ...(await api('fixtures/' + encodeURIComponent(FLIST.file))), redraw: FX.redraw };
@@ -802,11 +808,12 @@ function showFixtureKey() {
   pending = false;
   const d = $('#fxdetail');
   const groups = {};
-  FX.slots.forEach(s => (groups[s.group] = groups[s.group] || []).push(s));
+  FX.slots.filter(s => !s.fixed).forEach(s => (groups[s.group] = groups[s.group] || []).push(s));
   const used = slot => FX.fixtures.filter(f => f.home === slot || f.away === slot).length;
   d.innerHTML = `<h2>Fixture key</h2>
-    <div class="meta">${esc(FX.name)} — fixtures name their teams by slot; this table says which team sits in each slot.
-      Swapping two counties' Championship slots moves them between divisions without touching any fixture.</div>
+    <div class="meta">${esc(FX.name)} — ${['1998', 'acc'].includes(FX.fmt)
+      ? 'domestic teams are named directly in this game\'s fixtures; this table says which side sits in each international rotation slot this season.'
+      : 'fixtures name their teams by slot; this table says which team sits in each slot. Swapping two counties\' Championship slots moves them between divisions without touching any fixture.'}</div>
     ${Object.entries(groups).map(([g, ss]) => `<section class="card"><h3>${esc(g)}</h3><div class="tablewrap"><table>
       <thead><tr><th>Slot</th><th class="name">Team</th><th>Fixtures</th></tr></thead><tbody>
       ${ss.map(s => `<tr><td>${s.slot}</td><td class="name"><select data-slot="${s.slot}" style="width:240px">${TEAMS.map(t => `<option value="${t.id}" ${t.id === s.team ? 'selected' : ''}>${esc(t.name)}</option>`).join('')}</select></td><td>${used(s.slot)}</td></tr>`).join('')}

@@ -22,11 +22,11 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
 
-from .. import playerfile, teamfile
+from .. import fixturefile, playerfile, teamfile
 from ..crypto import decode, encode
 from ..playerfile import BITFIELDS, BITFIELDS_BY_NAME, BatRecord, BowlRecord
 from . import __version__, app
-from .fixtures import FixtureSet, SaveError, find_fixture_dir
+from .fixtures import FixtureSet, FixtureStoreMixin, SaveError, find_fixture_dir
 
 STATIC = Path(__file__).with_name('static')
 STATIC_FILES = {'icon.png': 'image/png', 'help.html': 'text/html; charset=utf-8'}
@@ -39,7 +39,16 @@ BOWL_FIELDS = ['balls', 'runs', 'wickets', 'best_wickets', 'best_runs', 'five_wi
                'ten_wickets', 'unknown']
 
 
-class Store:
+def _first_season(fx_dir):
+    """Season year of fix1.fxt (the first-season fixtures of ICC 2000/2001/2002), or None."""
+    path = next((p for p in Path(fx_dir).iterdir() if p.name.lower() == 'fix1.fxt'), None)
+    try:
+        return fixturefile.parse(path.read_bytes()).year if path else None
+    except (OSError, ValueError, EOFError):
+        return None
+
+
+class Store(FixtureStoreMixin):
     """In-memory copy of both files plus dirty tracking."""
 
     def __init__(self, players_path, teams_path, game=None, fixtures=None):
@@ -47,9 +56,6 @@ class Store:
         self.players_path = Path(players_path)
         self.teams_path = Path(teams_path)
         self.pf = playerfile.load(self.players_path)
-        if game:
-            self.pf.game_version = game
-        self.game_label = str(self.pf.game_version)
         self.tf = teamfile.load(self.teams_path)
         self.dirty = False
         # Fixture files: an explicit folder, else *.fxt next to the database (or in its Fxt/).
@@ -57,6 +63,11 @@ class Store:
         if fixtures and fx_dir is None:
             raise SystemExit('no .fxt files in %s' % fixtures)
         self.fx = FixtureSet(fx_dir) if fx_dir else None
+        if game:
+            self.pf.game_version = game
+        elif self.pf.game_version == 2000 and fx_dir and _first_season(fx_dir) == 2001:
+            self.pf.game_version = 2001   # same files as ICC 2000; only the fixtures' season tells them apart
+        self.game_label = str(self.pf.game_version)
 
     # ---------------------------------------------------- listing helpers
     def meta(self):
@@ -340,44 +351,10 @@ class Store:
         return {'saved': [str(self.players_path), str(self.teams_path)] + fx_saved, 'backups': backups}
 
     # ----------------------------------------------------------- fixtures
-    def fixtures(self):
-        if not self.fx:
-            raise KeyError('no fixture files loaded')
-        return self.fx
-
     def _venue_info(self):
         gname = {g.id: g.name for g in self.tf.grounds}
         grounds = {t.name_ref: [gname.get(x, '#%d' % x) for x in t.grounds] for t in self.pf.teams}
         return {'team_grounds': grounds, 'tests': {t.name_ref for t in self.pf.teams if t.national}, 'grounds': gname}
-
-    def fixture_files(self):
-        return self.fixtures().list()
-
-    def fixture_file(self, name):
-        self.fixtures().venue_info = self._venue_info()
-        return self.fixtures().file_json(name, self.team_names())
-
-    def update_fixture(self, name, i, data):
-        self.fixtures().venue_info = self._venue_info()
-        r = self.fixtures().update(name, i, data, self.team_names())
-        self.dirty = True
-        return r
-
-    def add_fixture(self, name, data):
-        self.fixtures().venue_info = self._venue_info()
-        r = self.fixtures().add(name, data, self.team_names())
-        self.dirty = True
-        return r
-
-    def delete_fixture(self, name, i):
-        r = self.fixtures().delete(name, i)
-        self.dirty = True
-        return r
-
-    def update_fixture_keys(self, name, data):
-        r = self.fixtures().update_keys(name, data)
-        self.dirty = True
-        return r
 
 
 def records_json(rec, i):
@@ -586,7 +563,7 @@ def find_game_files(game_dir):
     """Locate the databases and fixtures inside a game install (or any folder holding them).
 
     ICC 2000/2002 keep dataT.db / DataP.db and the .fxt files in the game folder; ICC 2006 keeps the
-    databases in Data\\ and the fixtures in Fxt\\; ICC 2 has a single database.db.
+    databases in Data\\ and the fixtures in Fxt\\; ICC 1998, ICC 2 and Australian Cricket Captain have a single database.db.
     """
     root = Path(game_dir)
     if not root.is_dir():
@@ -599,21 +576,23 @@ def find_game_files(game_dir):
     for d in (root, root / 'Data'):
         db = d / 'database.db'
         if db.is_file():
-            from .. import icc2file
-            try:
-                icc2file.load(db)
-            except ValueError:
-                continue
-            return {'database': db}
-    raise GameNotFound('no ICC database found in %s (looked for dataT.db + DataP.db, or ICC 2 database.db)' % root)
+            from .. import accfile, icc2file
+            for fmt in (icc2file, accfile):
+                try:
+                    fmt.load(db)
+                except (ValueError, EOFError):
+                    continue
+                return {'database': db}
+    raise GameNotFound('no ICC database found in %s (looked for dataT.db + DataP.db, or the database.db '
+                       'of ICC 1998 / ICC 2 / Australian Cricket Captain)' % root)
 
 
 def open_game(game_dir, game=None):
     """Load the store for a game folder (used by the app's folder chooser and --game-dir)."""
     found = find_game_files(game_dir)
     if found.get('database'):
-        from .icc2store import ICC2Store
-        return ICC2Store(found['database'])
+        from .icc2store import open_database
+        return open_database(found['database'])
     return Store(found['players'], found['teams'], game, found['fixtures'])
 
 
@@ -623,7 +602,8 @@ def main(argv=None):
     ap.add_argument('--teams', help='team file (dataP.db); default Original DB/2002/dataP.db')
     ap.add_argument('--game', type=int, choices=sorted(playerfile.NATIONAL_TABLES) + [2006],
                     help='game release (default: detected from the database)')
-    ap.add_argument('--database', help='ICC 2 (1999) database.db - edits that single file instead')
+    ap.add_argument('--database', help='ICC 1998, ICC 2 (1999) or Australian Cricket Captain database.db - '
+                                       'edits that single file instead')
     ap.add_argument('--game-dir', help='game install folder: finds the databases and fixture files in it')
     ap.add_argument('--fixtures', help='folder of .fxt fixture files (default: next to the player file, or its Fxt/)')
     ap.add_argument('--port', type=int, default=8002)
@@ -685,8 +665,8 @@ def _load_initial_store(args, app_mode):
         if app_mode:
             app.remember_folder(args.game_dir)
     elif args.database:
-        from .icc2store import ICC2Store
-        Handler.store = ICC2Store(args.database)
+        from .icc2store import open_database
+        Handler.store = open_database(args.database)
     elif args.players or args.teams or not app_mode:
         Handler.store = Store(args.players or 'Original DB/2002/dataT.db', args.teams or 'Original DB/2002/dataP.db',
                               args.game, args.fixtures)

@@ -1,6 +1,7 @@
 # ICC Database Editor
 
-An editor for the player and team databases of **International Cricket Captain 2 (1999), 2000, 2002 and 2006**. It reads the game's encrypted `.db` files directly and saves them back in the same format, so edited databases work in the game.
+An editor for the player and team databases of **International Cricket Captain (1998), ICC 2 (1999), 2000, 2001, 2002
+and 2006**, and of **Australian Cricket Captain (1998)**. It reads the game's encrypted `.db` files directly and saves them back in the same format, so edited databases work in the game.
 
 Needs Python 3.8+ only. Nothing to install.
 
@@ -42,7 +43,8 @@ python3 -m icc.editor --players "Original DB/2006/dataT.db" --teams "Original DB
 
 The game version is detected from the files, and the header shows which one is open ("ICC 2006 Editor").
 
-**ICC 2 (1999)** keeps everything in one file, `database.db`, so open it with `--database`:
+**ICC 1998**, **Australian Cricket Captain** and **ICC 2 (1999)** keep everything in one file, `database.db`, so open it with
+`--database` (the game is detected from the file):
 
 ```sh
 python3 -m icc.editor --database "Original DB/1999/database.db"
@@ -80,14 +82,15 @@ press **Save to game files** (top right). **Quit** (top right) closes the editor
 3. writes the new files, then re-reads them from disk as a final check.
 
 ### Differences between versions
-| | ICC 2 (1999) | ICC 2000 / 2002 | ICC 2006 |
-|---|---|---|---|
-| Files | one `database.db` (not encrypted) | `dataT.db` + `dataP.db` | `dataT.db` + `dataP.db` |
-| Batting / bowling ability | decimal values | slider (fixed steps) | exact decimal value |
-| Nationality | any national side | 2000: Test nations + Scotland/Kenya/Bangladesh; 2002 adds Namibia, Canada, Netherlands | any national side, including the new Associates |
-| Career records | 16 types (batting, bowling, fielding) | 18 types | 24 types, adding six Twenty20 records |
-| Club records | inside each team: first-class and one-day books | team file | team file |
-| Extra | full player names | — | "England central contract" tick box |
+| | ICC 1998 / Australian Cricket Captain | ICC 2 (1999) | ICC 2000 / 2001 / 2002 | ICC 2006 |
+|---|---|---|---|---|
+| Files | one `database.db` (not encrypted) | one `database.db` (not encrypted) | `dataT.db` + `dataP.db` | `dataT.db` + `dataP.db` |
+| Batting / bowling ability | decimal values | decimal values | slider (fixed steps) | exact decimal value |
+| Nationality | any national side | any national side | 2000/2001: Test nations + Scotland/Kenya/Bangladesh; 2002 adds Namibia, Canada, Netherlands | any national side, including the new Associates |
+| Career records | 10 types (ACC 13, adding Second XI) | 16 types (batting, bowling, fielding) | 18 types | 24 types, adding six Twenty20 records |
+| Club records | none | inside each team: first-class and one-day books | team file | team file |
+| Fixtures | editable (`eng98.fxt`; ACC `aus1998.fxt`, `ausX.fxt`) | built into the game (text resources in `Cricket2.exe`) | editable | editable |
+| Extra | — | full player names | — | "England central contract" tick box |
 
 ### Tips
 - **Batting** runs from about 5 to 130, and higher is better. **Bowling** runs from about 27 to 130, and **lower is better**, like a bowling average.

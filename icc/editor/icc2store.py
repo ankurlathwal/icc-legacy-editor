@@ -2,6 +2,7 @@
 
 Exposes the same JSON API as server.Store so the web page works unchanged, mapping
 ICC 2's float abilities, squads and record books onto the shapes the page expects.
+ACCStore reuses it for the ICC 1 engine games (accfile: ICC 1998, Australian Cricket Captain).
 """
 import copy
 import dataclasses
@@ -12,13 +13,13 @@ import struct
 import threading
 from pathlib import Path
 
-from .. import icc2file
-from ..icc2file import FIELDS, FIELDS_BY_NAME, RECORD_NAMES, RECORD_TYPES, get_record, set_record
+from .. import accfile, icc2file
+from .fixtures import FixtureSet, FixtureStoreMixin, find_fixture_dir
+from ..icc2file import RECORD_NAMES
 
 ROLE_FIELDS = ('captain', 'keeper', 'opening_bowler1', 'opening_bowler2')
-TEAM_MONEY = ('yearly_income', 'extra_income', 'youth_budget', 'physio_budget', 'coaching_budget', 'extra_costs')
 NONE_ROLE = 0xFFFFFFFF
-WAGE, EXPECTED_WAGE, MINIMUM_WAGE = 3, 4, 5      # indexes into Person.values
+WAGES = ('wage', 'expected_wage', 'minimum_wage')
 
 
 class SaveError(Exception):
@@ -35,14 +36,37 @@ def _set_roles(t, roles):
         t.set_value(f, v)
 
 
-class ICC2Store:
+def open_database(path):
+    """Store for a single-file database.db: ICC 2 (1999), ICC 1998 or Australian Cricket Captain."""
+    try:
+        return ICC2Store(path)
+    except (ValueError, EOFError):
+        return ACCStore(path)
+
+
+class ICC2Store(FixtureStoreMixin):
+    F = icc2file             # file-format module
     game_label = '2 (1999)'
+    title = None             # page title; default "ICC <game_version> Editor"
+    team_money = ('yearly_income', 'extra_income', 'youth_budget', 'physio_budget', 'coaching_budget', 'extra_costs')
 
     def __init__(self, path):
         self.lock = threading.Lock()
         self.path = Path(path)
-        self.db = icc2file.load(self.path)
+        self.db = self.F.load(self.path)
         self.dirty = False
+        self._load_fixtures()
+
+    def _load_fixtures(self):
+        # ICC 1998 / ACC keep their .fxt files next to database.db (ICC 2 has none)
+        fx_dir = find_fixture_dir(self.path.parent)
+        self.fx = FixtureSet(fx_dir) if fx_dir else None
+
+    def _venue_info(self):
+        gname = {g.id: g.name for g in self.db.grounds.items}
+        grounds = {t.key: [gname.get(x, '#%d' % x) for x in t.lists[0]] for t in self.db.teams.items}
+        return {'team_grounds': grounds, 'tests': {t.key for t in self.db.teams.items if t.value('national')},
+                'grounds': gname}
 
     # ------------------------------------------------------------ helpers
     @property
@@ -64,18 +88,22 @@ class ICC2Store:
         names = self.team_names()
         fields = [dict(name=f.name, label=f.label, group=f.group, kind='float' if f.kind == 'f' else 'int',
                        max=1 if f.kind == 'b' else (None if f.kind == 'f' else 65535), lo=None, hi=None)
-                  for f in FIELDS]
+                  for f in self.F.FIELDS]
         fields += [dict(name='bat_type', label='Batting role', group='Role', kind='int', max=7, lo=None, hi=None),
                    dict(name='bowler_type', label='Bowler type', group='Bowling', kind='int', max=7, lo=None, hi=None)]
-        return {
-            'kind': 'icc2', 'game_version': '2 (1999)',
+        meta = {
+            'kind': 'icc2', 'game_version': self.game_label,
             'players_path': str(self.path), 'teams_path': str(self.path),
             'dirty': self.dirty, 'duplicate_keys': [],
-            'record_types': RECORD_TYPES, 'career_records': True, 'float_abilities': False,
+            'record_types': self.F.RECORD_TYPES, 'career_records': True, 'float_abilities': False,
             'national_teams': {'0': 'None', **{str(i): names.get(i, '#%d' % i) for i in self.national_ids()}},
-            'bowler_types': icc2file.BOWLER_TYPES, 'bat_types': icc2file.BAT_TYPES,
+            'bowler_types': self.F.BOWLER_TYPES, 'bat_types': self.F.BAT_TYPES,
             'fields': fields,
+            'fixtures_dir': str(self.fx.folder) if self.fx else None,
         }
+        if self.title:
+            meta['title'] = self.title
+        return meta
 
     # ----------------------------------------------------------- players
     def player_summary(self, i, p, names):
@@ -92,14 +120,13 @@ class ICC2Store:
     def player_json(self, i):
         p = self.players[i]
         pe = p.person
-        fields = {f.name: (round(p.get(f.name), 3) if f.kind == 'f' else p.get(f.name)) for f in FIELDS}
+        fields = {f.name: (round(p.get(f.name), 3) if f.kind == 'f' else p.get(f.name)) for f in self.F.FIELDS}
         fields.update(bat_type=p.bat_type, bowler_type=p.bowler_type)
         return {
             'index': i, 'key': p.key, 'ref': pe.ref, 'team': pe.team,
             'first_name': pe.first_name, 'surname': pe.surname, 'initials': pe.initials, 'notes': pe.notes,
             'birthday': pe.birthday.isoformat(),
-            'wage': round(p.money(WAGE)), 'expected_wage': round(p.money(EXPECTED_WAGE)),
-            'minimum_wage': round(p.money(MINIMUM_WAGE)),
+            **{k: round(p.wage(k)) for k in WAGES},
             'injured': False, 'nationality': pe.nation,
             'batting_value': None, 'bowling_value': None, 'england_contracted': None,
             'fields': fields,
@@ -110,9 +137,9 @@ class ICC2Store:
     # also carry the fielding record (catches / stumpings) of the same type.
     def _bat_rows(self, p):
         rows = {}
-        for t in range(len(RECORD_TYPES)):
-            b = get_record(p, 'batting', t) or {}
-            f = get_record(p, 'fielding', t) or {}
+        for t in range(len(self.F.RECORD_TYPES)):
+            b = self.F.get_record(p, 'batting', t) or {}
+            f = self.F.get_record(p, 'fielding', t) or {}
             if any(v for k, v in b.items() if k != 'unknown') or any(f.values()):
                 row = {k: v for k, v in b.items() if k != 'unknown'}
                 row.update(caught=f.get('caught', 0), stumped=f.get('stumped', 0))
@@ -121,8 +148,8 @@ class ICC2Store:
 
     def _bowl_rows(self, p):
         rows = {}
-        for t in range(len(RECORD_TYPES)):
-            b = get_record(p, 'bowling', t)
+        for t in range(len(self.F.RECORD_TYPES)):
+            b = self.F.get_record(p, 'bowling', t)
             if b and any(v for k, v in b.items() if k != 'unknown'):
                 rows[str(t)] = {k: v for k, v in b.items() if k != 'unknown'}
         return rows
@@ -131,14 +158,14 @@ class ICC2Store:
         p = self.players[i]
         pe = p.person
         for k in ('first_name', 'surname', 'initials', 'notes'):
-            if k in data:
+            if k in data and getattr(pe, k) is not None:   # ACC has no notes
                 v = str(data[k]); v.encode('latin-1')
                 setattr(pe, k, v)
         if 'birthday' in data:
             pe.birthday = datetime.date.fromisoformat(data['birthday'])
-        for k, idx in (('wage', WAGE), ('expected_wage', EXPECTED_WAGE), ('minimum_wage', MINIMUM_WAGE)):
+        for k in WAGES:
             if k in data:
-                p.set_money(idx, max(0, float(data[k])))
+                p.set_wage(k, max(0, float(data[k])))
         if 'nationality' in data:
             n = int(data['nationality'])
             if n and n not in self.national_ids():
@@ -149,23 +176,24 @@ class ICC2Store:
                 p.bat_type = int(v) & 7
             elif name == 'bowler_type':
                 p.bowler_type = int(v) & 7
-            elif name in FIELDS_BY_NAME:
+            elif name in self.F.FIELDS_BY_NAME:
                 p.set(name, v)
             else:
                 raise ValueError('unknown field %s' % name)
+        F = self.F
         if 'batting_records' in data:
             recs = {int(k): v for k, v in data['batting_records'].items()}
-            for t in range(len(RECORD_TYPES)):
+            for t in range(len(F.RECORD_TYPES)):
                 if t in recs:
-                    set_record(p, 'batting', t, recs[t])
-                    set_record(p, 'fielding', t, {k: recs[t][k] for k in ('caught', 'stumped') if k in recs[t]})
+                    F.set_record(p, 'batting', t, recs[t])
+                    F.set_record(p, 'fielding', t, {k: recs[t][k] for k in ('caught', 'stumped') if k in recs[t]})
                 else:
-                    set_record(p, 'batting', t, None)
-                    set_record(p, 'fielding', t, None)
+                    F.set_record(p, 'batting', t, None)
+                    F.set_record(p, 'fielding', t, None)
         if 'bowling_records' in data:
             recs = {int(k): v for k, v in data['bowling_records'].items()}
-            for t in range(len(RECORD_TYPES)):
-                set_record(p, 'bowling', t, recs.get(t))
+            for t in range(len(F.RECORD_TYPES)):
+                F.set_record(p, 'bowling', t, recs.get(t))
         if 'team' in data and int(data['team']) != pe.team:
             self.move_player(p.key, int(data['team']))
         self.dirty = True
@@ -185,7 +213,8 @@ class ICC2Store:
         pe.ref = p.key
         pe.first_name, pe.surname = first, sur
         pe.initials = str(data.get('initials', '')).strip() or ''.join(w[0] for w in (first + ' ' + sur).split()).upper()
-        pe.notes = ''
+        if pe.notes is not None:
+            pe.notes = ''
         # start with empty career records (keep each block's trailing DWORD)
         p.batting_records = bytes(len(p.batting_records) - 4) + p.batting_records[-4:]
         p.bowling_records = bytes(len(p.bowling_records) - 4) + p.bowling_records[-4:]
@@ -267,10 +296,10 @@ class ICC2Store:
                     'batting': round(p.get('batting')), 'bowling': round(p.get('bowling'))}
         roles = _roles(t)
         d['club'] = {
-            'national': bool(t.value('national')), 'minor': bool(t.value('minor')),
+            'national': bool(t.value('national')), 'minor': bool(t.has_value('minor') and t.value('minor')),
             'squad': [row(k) for k in t.squad], 'selected': [row(k) for k in t.selected],
             'roles': {f: (None if r >= len(t.selected) else r) for f, r in zip(ROLE_FIELDS, roles)},
-            'money': {k: t.value(k) for k in TEAM_MONEY},
+            'money': {k: t.value(k) for k in self.team_money},
             'year_founded': t.value('year_founded'), 'colour': t.colour, 'history': t.history,
         }
         return d
@@ -312,7 +341,7 @@ class ICC2Store:
                         roles[j] = v
                 _set_roles(t, roles)
             for k, v in club.get('money', {}).items():
-                if k in TEAM_MONEY:
+                if k in self.team_money:
                     t.set_value(k, max(0, int(v)))
             if 'year_founded' in club:
                 t.set_value('year_founded', int(club['year_founded']))
@@ -406,17 +435,19 @@ class ICC2Store:
                         v = int(v)
                     vals[name] = v
         book.values = [vals[n] for n in RECORD_NAMES]
-        icc2file.serialize(self.db)   # validate that everything still encodes
+        self.F.serialize(self.db)   # validate that everything still encodes
         self.dirty = True
         return self._book_json(idx)
 
     # -------------------------------------------------------------- save
     def save(self):
-        data = icc2file.serialize(self.db)
-        if icc2file.serialize(icc2file.parse(data)) != data:
+        F = self.F
+        data = F.serialize(self.db)
+        if F.serialize(F.parse(data)) != data:
             raise SaveError('re-read check failed')
+        fx_out = self.fx.build() if self.fx else []
         stamp = datetime.datetime.now().strftime('%Y%m%d-%H%M%S')
-        backups = []
+        fx_saved, backups = self.fx.write(fx_out, stamp) if fx_out else ([], [])
         if self.path.exists():
             b = self.path.with_name(self.path.name + '.bak-' + stamp)
             shutil.copy2(self.path, b)
@@ -424,7 +455,30 @@ class ICC2Store:
         tmp = self.path.with_name(self.path.name + '.tmp')
         tmp.write_bytes(data)
         os.replace(tmp, self.path)
-        if icc2file.serialize(icc2file.load(self.path)) != data:
+        if F.serialize(F.load(self.path)) != data:
             raise SaveError('file on disk does not match after saving; restore from %s' % ', '.join(backups))
         self.dirty = False
-        return {'saved': [str(self.path)], 'backups': backups}
+        return {'saved': [str(self.path)] + fx_saved, 'backups': backups}
+
+
+class ACCStore(ICC2Store):
+    """ICC 1 engine games - International Cricket Captain (1998) and Australian Cricket Captain:
+    ICC 2's outline with fewer career records and no club record books. F is the detected accfile.Format."""
+    team_money = accfile.TEAM_MONEY
+
+    def __init__(self, path):
+        self.lock = threading.Lock()
+        self.path = Path(path)
+        self.db = accfile.load(self.path)
+        self.F = self.db.fmt
+        self.game_label = self.F.name
+        self.title = self.F.title
+        self.dirty = False
+        self._load_fixtures()
+
+    def meta(self):
+        return dict(super().meta(), club_records=False,
+                    bat_columns=accfile.BAT_COLUMNS, bowl_columns=accfile.BOWL_COLUMNS)
+
+    def records_list(self):
+        return []
