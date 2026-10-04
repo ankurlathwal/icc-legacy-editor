@@ -1,0 +1,136 @@
+<!-- How-to guide shown inside the editor (Help button). Plain HTML fragment; styled by index.html. -->
+<div class="help">
+<h2>How to use ICC Editor</h2>
+<p class="meta">An unofficial, fan-made editor for the databases of <b>International Cricket Captain 2</b> (1999),
+<b>ICC 2000</b>, <b>ICC 2002</b> and <b>ICC 2006</b>. It edits the game's own files and keeps a backup every time you save.</p>
+
+<nav class="toc">
+  <a href="#h-start">Getting started</a><a href="#h-players">Players</a><a href="#h-teams">Teams</a>
+  <a href="#h-grounds">Grounds &amp; club records</a><a href="#h-fixtures">Fixtures</a><a href="#h-save">Saving &amp; backups</a>
+  <a href="#h-play">Playing your edits</a><a href="#h-versions">Game versions</a><a href="#h-limits">Game limits</a>
+  <a href="#h-trouble">Troubleshooting</a>
+</nav>
+
+<section class="card" id="h-start"><h3>Getting started</h3>
+<ol>
+  <li><b>Close the game</b> first. It reads the databases when you start a new game.</li>
+  <li>Click <b>Choose game folder…</b> and pick the folder the game is installed in (for example <code>C:\Games\ICC 2000</code>).
+    On Windows the folders are listed right in the editor: start from a drive or your Desktop, and folders that hold an ICC
+    game are marked 🏏 with an <b>Open</b> button. You can also pick any folder that holds a copy of the database files,
+    or paste a folder path.</li>
+  <li>The editor finds the files by itself:
+    <ul>
+      <li>ICC 2: <code>database.db</code></li>
+      <li>ICC 2000 / 2002: <code>dataT.db</code> (players) and <code>DataP.db</code> (teams), plus the <code>*.fxt</code> fixture files</li>
+      <li>ICC 2006: <code>Data\dataT.db</code>, <code>Data\dataP.db</code> and the <code>Fxt</code> folder</li>
+    </ul></li>
+  <li>Make your changes, press <b>Apply changes</b> on each page, then <b>Save to game files</b> (top right).</li>
+</ol>
+<p>Recent folders are listed on the start screen. <b>Open another game</b> switches to a different game; <b>Quit</b> closes the
+editor. Both warn you first if you have changes that are not saved.</p>
+</section>
+
+<section class="card" id="h-players"><h3>Players</h3>
+<ul>
+  <li>Search by name, filter by <b>team</b> or <b>nationality</b>, and sort by batting or bowling. The list keeps its place while you edit.</li>
+  <li><b>Details</b> tab: name, date of birth, county, national team, wages, and every ability: batting (including Test/ODI/List A
+    ratings and form), bowling (type, arm, form, economy), fielding, role (wicketkeeper, batting role, left/right-handed), fitness,
+    loyalty and contract length.</li>
+  <li><b>Stats</b> tab: career batting, fielding and bowling records for each format (Test, ODI, First-class, List A…).</li>
+  <li><b>Batting</b>: higher is better. <b>Bowling</b> and <b>economy</b>: <b>lower is better</b>, like a bowling average.</li>
+  <li><b>+ New player</b> creates a player who copies the abilities of a player you pick, so start from someone similar and adjust.</li>
+  <li><b>Delete player</b> also removes them from every squad and picked XI; their place in the XI is filled automatically.</li>
+  <li>Changing a player's county moves them into that county's squad.</li>
+</ul>
+</section>
+
+<section class="card" id="h-teams"><h3>Teams</h3>
+<ul>
+  <li>Change a team's name, short name and abbreviation.</li>
+  <li>For counties and national sides: the <b>squad</b>, the <b>picked XI</b> in batting order, the captain, wicketkeeper and
+    opening bowlers, and club details such as year founded, kit colour and budgets.</li>
+  <li>Adding a player to a county squad moves them from their old county. National squads can include anyone.</li>
+</ul>
+</section>
+
+<section class="card" id="h-grounds"><h3>Grounds &amp; club records</h3>
+<ul>
+  <li><b>Grounds</b>: names, addresses and the description shown in the game.</li>
+  <li><b>Club records</b>: each team's record book: partnerships for every wicket, highest and lowest totals, most runs and
+    wickets in a season, best bowling and highest score.</li>
+</ul>
+</section>
+
+<section class="card" id="h-fixtures"><h3>Fixtures (ICC 2000, 2002, 2006)</h3>
+<ul>
+  <li>Pick a fixture file at the top of the list. ICC 2000/2002: <code>fix1</code> = first season, <code>fixX</code> = later seasons,
+    <code>int1</code>/<code>intX</code> = the same seasons' international fixtures only, <code>wc</code> = World Cup, <code>sc*</code> = historical scenarios.
+    ICC 2006 has one file per season (<code>fix06</code>, <code>int06</code>…).</li>
+  <li>Change the date, competition, home and away side, venue, day/night, and the match number in a series (e.g. 2nd Test of 3).
+    <b>Duplicate</b> a fixture to add similar ones quickly.</li>
+  <li><b>Venue</b>: "Home side's ground" lets the game choose: the 1st Test of a series at the host's first ground, the 2nd at its
+    second, and so on. Each fixture in the list shows the ground the game will use.</li>
+  <li><b>Fixture key</b>: fixtures name their teams by numbered slot. Slots 1–9 are Championship Division 1 and 10–18 Division 2
+    (the National League has its own slots). Swapping two counties' slots moves them between divisions without touching any fixture.</li>
+  <li>"To be decided" and "Draw position" sides in cup and World Cup knockouts are filled in by the game as the competition goes on.</li>
+</ul>
+</section>
+
+<section class="card" id="h-save"><h3>Saving &amp; backups</h3>
+<ul>
+  <li><b>Apply changes</b> keeps an edit in the editor. Nothing is written to the game until you press <b>Save to game files</b>.</li>
+  <li>Before writing, the editor builds the files and checks them by reading them back. If anything looks wrong, it doesn't save.</li>
+  <li>Every save first copies each changed file to <code>&lt;name&gt;.bak-&lt;date-time&gt;</code> next to it. To undo a save,
+    delete the file and rename its backup back (e.g. <code>dataT.db.bak-20260101-120000</code> → <code>dataT.db</code>).</li>
+</ul>
+</section>
+
+<section class="card" id="h-play"><h3>Playing your edits</h3>
+<ul>
+  <li>Start a <b>new career or game</b> to see your changes. Saved games keep their own copy of the data they started with.</li>
+  <li>If you edited a copy of the files rather than the game folder, copy them back into the game folder
+    (ICC 2006: databases into <code>Data</code>, fixtures into <code>Fxt</code>). Keep the original files somewhere safe.</li>
+  <li>Always keep <code>dataT.db</code> and <code>DataP.db</code> together as a pair from the same database.</li>
+</ul>
+</section>
+
+<section class="card" id="h-versions"><h3>Game versions</h3>
+<div class="tablewrap"><table class="plain">
+  <thead><tr><th></th><th>ICC 2 (1999)</th><th>ICC 2000 / 2002</th><th>ICC 2006</th></tr></thead>
+  <tbody>
+    <tr><td>Files</td><td>one database.db</td><td>dataT.db + DataP.db + fixtures</td><td>Data\ + Fxt\</td></tr>
+    <tr><td>Abilities</td><td>decimal values</td><td>sliders (fixed steps)</td><td>exact decimal values</td></tr>
+    <tr><td>Nationalities</td><td>any national side</td><td>Test nations + a few Associates (2002 adds Namibia, Canada, Netherlands)</td><td>any national side</td></tr>
+    <tr><td>Career records</td><td>16 types</td><td>18 types</td><td>24 types, including Twenty20</td></tr>
+    <tr><td>Fixtures</td><td>built into the game</td><td>editable</td><td>editable, one file per season</td></tr>
+  </tbody></table></div>
+</section>
+
+<section class="card" id="h-limits"><h3>Game limits worth knowing</h3>
+<ul>
+  <li><b>Only Test nations can play Tests, ODIs and triangular series.</b> The game has them built in (ICC 2000/2002: the nine
+    Test nations; ICC 2006 adds Bangladesh). Kenya, Scotland, Ireland and the other Associates can only appear in World Cup
+    fixtures; anything else crashes when the match starts. The editor blocks such fixtures.</li>
+  <li><b>Every home side needs a ground.</b> Most Associates have no grounds in the database, so a fixture with one of them at
+    home needs an explicit venue. The editor flags these fixtures in the list.</li>
+  <li><b>ICC 2000 compressed releases</b>: some copies ship their backgrounds, grounds, maps and photos packed in <code>.ARH</code>
+    files that a DOS tool unpacks. That tool doesn't run on 64-bit Windows, so the game draws screens on top of each other.
+    Unpacking the <code>bkdps</code>, <code>grnds</code>, <code>maps</code>, <code>mlms</code> and <code>photos</code> folders (for example with DOSBox) fixes it.</li>
+</ul>
+</section>
+
+<section class="card" id="h-trouble"><h3>Troubleshooting</h3>
+<ul>
+  <li><b>"Could not open"</b>: pick the folder that contains the database files (or the game folder that holds the <code>Data</code> folder for ICC 2006).</li>
+  <li><b>Save fails with "permission denied"</b>: Windows protects games installed under <code>Program Files</code>. Move the game to a
+    folder such as <code>C:\Games</code>, or edit a copy and copy it back.</li>
+  <li><b>Windows: "Windows protected your PC"</b> on first run: click <b>More info</b>, then <b>Run anyway</b> (the editor isn't signed by a registered publisher).</li>
+  <li><b>Windows: nothing appears</b>: run <code>runtime\Troubleshoot.bat</code> to see the error. Log: <code>%APPDATA%\ICC Editor\editor.log</code>.</li>
+  <li><b>Mac: "cannot be opened because the developer cannot be verified"</b>: right-click the app, choose <b>Open</b>, then <b>Open</b> again.
+    Log: <code>~/Library/Logs/ICC Editor.log</code>.</li>
+</ul>
+</section>
+
+<p class="meta" id="h-about">ICC Editor <span class="appversion"></span>, an unofficial, fan-made tool, not affiliated with or endorsed by the makers or
+publishers of International Cricket Captain. Always keep a copy of your original game files.</p>
+</div>

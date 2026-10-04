@@ -1,0 +1,23 @@
+# Game installs and stray game files: the games' own (copyrighted) files, kept on the user's PC
+/ICC 2000/
+/ICC 2002/
+/ICC 2006/
+/ICC2/
+/I2Ed/
+/dataT.db
+/DataP.db
+/convdb.exe
+
+# Backups the editor writes on every save, and its temp files
+*.bak-*
+*.tmp
+
+# Built packages (attach dist/*.zip to a GitHub release instead)
+/dist/
+
+# Launcher state, Python and OS clutter
+last-folder.txt
+__pycache__/
+*.pyc
+.DS_Store
+Thumbs.db

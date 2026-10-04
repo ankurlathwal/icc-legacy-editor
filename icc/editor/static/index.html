@@ -1,0 +1,831 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ICC Database Editor</title>
+<link rel="icon" href="/icon.png">
+<style>
+:root {
+  --bg: #f6f5f1; --panel: #ffffff; --ink: #1d1f1c; --muted: #6b6f68; --line: #e2e0d8;
+  --accent: #1f6f4a; --accent-ink: #ffffff; --warn: #a3471b; --sel: #e7f1eb; --input: #fbfaf7;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #151714; --panel: #1d201c; --ink: #e8e8e3; --muted: #9a9f96; --line: #30342e;
+          --accent: #4fae7e; --accent-ink: #0f1a13; --warn: #e08a5c; --sel: #243329; --input: #181a17; }
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { margin: 0; font: 14px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; background: var(--bg); color: var(--ink); }
+header { display: flex; align-items: center; gap: 16px; padding: 10px 20px; background: var(--panel); border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 5; }
+header h1 { font-size: 16px; margin: 0; letter-spacing: .02em; display: flex; align-items: center; gap: 9px; }
+header h1 img { width: 28px; height: 28px; }
+.help ol, .help ul { margin: 0; padding-left: 22px; }
+.help li { margin: 5px 0; line-height: 1.5; }
+.help code { background: var(--sel); padding: 1px 5px; border-radius: 4px; font-size: 12.5px; }
+.help .card p { margin: 10px 0 0; line-height: 1.5; }
+.help section.card { scroll-margin-top: 12px; }
+.toc { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 16px; }
+.toc a { padding: 4px 10px; border: 1px solid var(--line); border-radius: 999px; color: var(--ink); text-decoration: none; font-size: 13px; background: var(--panel); }
+.toc a:hover { background: var(--sel); }
+.fb-roots { display: flex; flex-wrap: wrap; gap: 6px; margin: 14px 0 8px; }
+.fb-path { display: flex; gap: 10px; align-items: center; margin: 6px 0; font-size: 13px; word-break: break-all; }
+.fb-path button { flex: none; white-space: nowrap; }
+.fb-list { max-height: 340px; overflow: auto; border: 1px solid var(--line); border-radius: 6px; background: var(--input); }
+.fb-row { display: flex; align-items: center; gap: 10px; padding: 6px 10px; border-bottom: 1px solid var(--line); cursor: pointer; }
+.fb-row:hover { background: var(--sel); }
+.fb-row > span:first-child { flex: 1; }
+.fb-row.game { font-weight: 600; }
+.fb-badge { font-size: 11px; color: var(--accent); font-weight: 600; }
+.fb-row button { padding: 3px 12px; }
+table.plain th, table.plain td { text-align: left; white-space: normal; vertical-align: top; padding: 6px 8px; }
+nav { display: flex; gap: 4px; }
+nav button { background: none; border: 0; padding: 6px 12px; border-radius: 6px; color: var(--muted); cursor: pointer; font: inherit; }
+nav button.on { background: var(--sel); color: var(--ink); font-weight: 600; }
+.spacer { flex: 1; }
+.status { color: var(--muted); font-size: 12px; }
+.status.dirty { color: var(--warn); font-weight: 600; }
+button.primary { background: var(--accent); color: var(--accent-ink); border: 0; border-radius: 6px; padding: 7px 14px; font: inherit; font-weight: 600; cursor: pointer; }
+button.primary:disabled { opacity: .45; cursor: default; }
+button.ghost.danger { color: var(--warn); border-color: var(--warn); }
+.actions .spacer { flex: 1; }
+button.ghost { background: none; border: 1px solid var(--line); color: var(--ink); border-radius: 6px; padding: 5px 10px; font: inherit; cursor: pointer; }
+main { display: grid; grid-template-columns: 320px 1fr; height: calc(100vh - 53px); }
+main.full { grid-template-columns: 1fr; }
+aside { border-right: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; background: var(--panel); }
+.filters { padding: 12px; display: grid; gap: 8px; border-bottom: 1px solid var(--line); }
+input, select, textarea { font: inherit; color: var(--ink); background: var(--input); border: 1px solid var(--line); border-radius: 5px; padding: 5px 7px; width: 100%; }
+textarea { min-height: 70px; resize: vertical; }
+.list { overflow: auto; flex: 1; }
+.row { padding: 7px 12px; border-bottom: 1px solid var(--line); cursor: pointer; display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; }
+.row:hover { background: var(--sel); }
+.row.on { background: var(--sel); box-shadow: inset 3px 0 0 var(--accent); }
+.row .sub { color: var(--muted); font-size: 12px; }
+.row .nums { color: var(--muted); font-size: 12px; text-align: right; font-variant-numeric: tabular-nums; }
+.detail { overflow: auto; padding: 20px 28px 0; }
+.detail > :last-child:not(.actionbar) { margin-bottom: 48px; }
+.detail h2 { margin: 0 0 4px; font-size: 22px; }
+.detail .meta { color: var(--muted); margin-bottom: 18px; font-size: 13px; }
+section.card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; margin-bottom: 14px; }
+section.card h3 { margin: 0 0 12px; font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px 18px; }
+label.f { display: grid; gap: 3px; font-size: 12px; color: var(--muted); }
+label.f .v { color: var(--ink); font-variant-numeric: tabular-nums; }
+label.chk { display: flex; gap: 8px; align-items: center; font-size: 13px; }
+label.chk input { width: auto; }
+.slider { display: grid; grid-template-columns: 1fr 64px; gap: 8px; align-items: center; }
+.slider input[type=range] { padding: 0; accent-color: var(--accent); }
+table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
+th, td { padding: 4px 5px; border-bottom: 1px solid var(--line); text-align: right; white-space: nowrap; }
+th:first-child, td:first-child { text-align: left; }
+th { font-size: 11px; color: var(--muted); font-weight: 600; text-transform: uppercase; }
+td input { width: 78px; padding: 3px 5px; text-align: right; }
+td input.wide { width: 150px; text-align: left; }
+td:has(> input.wide), td.name, th.name { text-align: left; }
+.tablewrap { overflow-x: auto; }
+.actions { display: flex; gap: 8px; margin-top: 10px; align-items: center; }
+.subtabs { display: flex; gap: 4px; margin: 0 0 14px; border-bottom: 1px solid var(--line); }
+.subtabs button { background: none; border: 0; border-bottom: 2px solid transparent; padding: 8px 14px; margin-bottom: -1px; font: inherit; color: var(--muted); cursor: pointer; }
+.subtabs button.on { color: var(--ink); font-weight: 600; border-bottom-color: var(--accent); }
+/* Apply bar stays pinned to the bottom of the detail pane while you scroll the form. */
+.actionbar { position: sticky; bottom: 0; z-index: 3; margin: 14px -28px 0; padding: 12px 28px 14px;
+             background: var(--panel); border-top: 1px solid var(--line); box-shadow: 0 -6px 14px rgba(0,0,0,.06); }
+@media (max-width: 800px) { .actionbar { margin: 14px -16px 0; padding: 12px 16px; } }
+.note { color: var(--muted); font-size: 12px; }
+.banner { background: var(--sel); border: 1px solid var(--line); border-radius: 8px; padding: 10px 14px; margin-bottom: 14px; font-size: 13px; }
+.toast { position: fixed; top: 64px; right: 18px; z-index: 100; background: var(--ink); color: var(--bg); padding: 10px 14px; border-radius: 8px;
+         opacity: 0; transform: translateY(-6px); transition: opacity .2s, transform .2s; max-width: 460px; pointer-events: none; box-shadow: 0 6px 20px rgba(0,0,0,.18); }
+.toast.show { opacity: 1; transform: none; }
+.toast.ok { background: var(--accent); color: var(--accent-ink); }
+.toast.err { background: var(--warn); color: #fff; }
+.okmsg { color: var(--accent); font-weight: 600; }
+body.busy, body.busy * { cursor: progress !important; }
+.empty { color: var(--muted); padding: 40px; text-align: center; }
+@media (max-width: 800px) {
+  main { grid-template-columns: 1fr; height: auto; }
+  aside { max-height: 45vh; }
+  header { flex-wrap: wrap; }
+  .detail { padding: 16px; }
+}
+</style>
+</head>
+<body>
+<header>
+  <h1><img src="/icon.png" alt=""><span id="apptitle">ICC Editor</span></h1>
+  <nav id="tabs">
+    <button data-tab="players" class="on">Players</button>
+    <button data-tab="teams">Teams</button>
+    <button data-tab="grounds">Grounds</button>
+    <button data-tab="records">Club records</button>
+    <button data-tab="fixtures" hidden>Fixtures</button>
+  </nav>
+  <div class="spacer"></div>
+  <span id="status" class="status"></span>
+  <button id="helpbtn" class="ghost" title="How to use the editor">Help</button>
+  <button id="switchgame" class="ghost" hidden>Open another game</button>
+  <button id="save" class="primary" disabled>Save to game files</button>
+  <button id="quit" class="ghost" title="Quit the editor">Quit</button>
+</header>
+<main id="main"></main>
+<div id="toast" class="toast"></div>
+
+<script>
+const $ = (s, el = document) => el.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const api = async (path, opts = {}) => {
+  const r = await fetch('/api/' + path, { headers: { 'Content-Type': 'application/json' }, ...opts });
+  const j = await r.json();
+  if (!r.ok) throw new Error(j.error || r.statusText);
+  return j;
+};
+const toast = (msg, kind = '') => {
+  const t = $('#toast'); t.textContent = msg; t.className = 'toast show ' + kind;
+  clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('show'), kind === 'err' ? 6000 : 3500);
+};
+
+// Feedback for Apply buttons: "Applying…" while the change is sent, then a green confirmation next to the
+// buttons (the view usually re-renders, so it goes in the new action bar) or on the button itself.
+async function applying(btn, work, done = 'Applied') {
+  const label = btn.textContent;
+  btn.disabled = true; btn.textContent = done === 'Applied' ? 'Applying…' : 'Working…';
+  document.body.classList.add('busy');
+  try {
+    await work();
+    toast('✓ ' + done + ' — remember to save to game files', 'ok');
+    if (btn.isConnected) {
+      btn.textContent = '✓ ' + done;
+      setTimeout(() => { if (btn.isConnected) { btn.textContent = label; btn.disabled = false; } }, 1500);
+      return;
+    }
+    const note = document.querySelector('.actionbar .note');
+    if (note) {
+      note.innerHTML = `<span class="okmsg">✓ ${done} — not saved to game files yet</span>`;
+      setTimeout(() => { const m = note.querySelector('.okmsg'); if (m) m.remove(); }, 5000);
+    }
+  } catch (e) {
+    toast('Not ' + done.toLowerCase() + ': ' + e.message, 'err');
+  } finally {
+    document.body.classList.remove('busy');
+    if (btn.isConnected && btn.textContent !== '✓ ' + done) { btn.textContent = label; btn.disabled = false; }
+  }
+}
+
+let META, TEAMS = [], PLAYERS = [], tab = 'players', sel = null, pending = false;
+let PTAB = 'details';   // player sub-tab, remembered while moving between players
+const teamName = id => (TEAMS.find(t => t.id === id) || {}).name || (id ? '#' + id : '—');
+const setDirty = d => { const s = $('#status'); s.textContent = d ? 'Unsaved changes' : 'All changes saved'; s.className = 'status' + (d ? ' dirty' : ''); $('#save').disabled = !d; };
+
+async function boot() {
+  META = await api('meta');
+  if (META.needs_folder) return renderChooser(META);
+  $('#switchgame').hidden = !META.app;
+  $('#apptitle').textContent = `ICC ${META.game_version} Editor`; document.title = `ICC ${META.game_version} Editor`;
+  TEAMS = await api('teams');
+  PLAYERS = await api('players');
+  setDirty(META.dirty);
+  $('#tabs [data-tab=fixtures]').hidden = !META.fixtures_dir;
+  render();
+}
+
+document.querySelectorAll('#tabs button').forEach(b => b.onclick = () => {
+  if (pending && !confirmLeave()) return;
+  document.querySelectorAll('#tabs button').forEach(x => x.classList.toggle('on', x === b));
+  tab = b.dataset.tab; sel = null; render();
+});
+const confirmLeave = () => window.confirm('You have unapplied changes on this page. Discard them?') && !(pending = false);
+
+$('#save').onclick = async () => {
+  if (pending && !window.confirm('Some edits on this page have not been applied yet. Save anyway (without them)?')) return;
+  try {
+    const r = await api('save', { method: 'POST' });
+    setDirty(false);
+    toast('✓ Saved to the game files. Backups: ' + r.backups.map(b => b.split(/[\\/]/).pop()).join(', '), 'ok');
+  } catch (e) { toast('Save failed: ' + e.message, 'err'); }
+};
+
+// Quit: the macOS app quits natively; otherwise stop the editor and close the app window.
+$('#quit').onclick = async () => {
+  if ((!$('#save').disabled || pending) && !window.confirm('You have changes that are not saved to the game files. Quit without saving?')) return;
+  window.onbeforeunload = null;
+  const native = window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.quit;
+  if (native) return native.postMessage('');
+  try { await fetch('/api/quit', { method: 'POST' }); } catch (e) { /* already stopped */ }
+  window.close();
+  setTimeout(() => { document.body.innerHTML = '<div class="empty" style="padding:80px">The ICC editor has stopped. You can close this window.</div>'; }, 300);
+};
+
+function render() {
+  const m = $('#main');
+  m.className = tab === 'players' || tab === 'teams' || tab === 'fixtures' ? '' : 'full';
+  if (tab === 'players') return renderPlayers(m);
+  if (tab === 'teams') return renderTeams(m);
+  if (tab === 'grounds') return renderGrounds(m);
+  if (tab === 'records') return renderRecords(m);
+  if (tab === 'fixtures') return renderFixtures(m);
+}
+
+/* ------------------------------------------------------- game chooser */
+// App mode: pick which game folder to edit. The macOS app supplies a native folder panel
+// (window.webkit.messageHandlers.pickFolder); elsewhere an in-app folder browser (/api/browse) is used,
+// because a dialog opened by the background editor process would appear behind the window on Windows.
+function renderChooser(info) {
+  $('#tabs').hidden = $('#save').hidden = $('#switchgame').hidden = true;
+  $('#status').textContent = '';
+  $('#apptitle').textContent = document.title = 'ICC Editor';
+  const m = $('#main'); m.className = 'full';
+  m.innerHTML = `<div class="detail" style="max-width:760px;margin:0 auto;width:100%">
+    <h2>Open a game</h2>
+    <div class="banner">New here? <a href="#" id="chooserHelp">Read the short guide</a> — it covers everything from opening a game to playing your edits.</div>
+    <div class="meta">Choose an ICC game folder (ICC 2, 2000, 2002 or 2006) or a folder holding its databases.
+      The editor finds dataT.db / DataP.db (or ICC 2's database.db) and the fixture files by itself.</div>
+    <section class="card"><div class="actions" style="margin:0"><button class="primary" id="pick">Choose game folder…</button>
+      <span class="note" id="chooserNote"></span></div>
+      <div class="actions"><input id="pathIn" placeholder="…or type / paste a folder path" style="flex:1"><button class="ghost" id="pathGo">Open</button></div>
+      <div id="fbrowser" hidden></div></section>
+    ${info.recent.length ? `<section class="card"><h3>Recent</h3>${info.recent.map(r => `<div class="row" data-path="${esc(r)}"><div>${esc(r.split(/[\\/]/).filter(Boolean).pop())}</div><div class="nums">Open</div><div class="sub">${esc(r)}</div></div>`).join('')}</section>` : ''}
+  </div>`;
+  const busy = on => { $('#pick').disabled = $('#pathGo').disabled = on; $('#chooserNote').textContent = on ? 'Opening…' : ''; };
+  const openPath = async path => {
+    if (!path) return;
+    busy(true);
+    try { await api('open', { method: 'POST', body: JSON.stringify({ path }) }); window.onbeforeunload = null; location.reload(); }
+    catch (e) { busy(false); toast(e.message); }
+  };
+  window.iccFolderPicked = path => openPath(path);
+  $('#pick').onclick = () => {
+    const native = window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.pickFolder;
+    if (native) return native.postMessage(info.folder || info.recent[0] || '');
+    const last = info.folder || info.recent[0];
+    browseTo(last ? last.replace(/[\\/][^\\/]+[\\/]?$/, '') || last : '');   // start next to the last game
+  };
+
+  // In-app folder browser: drives / home first, folders that hold an ICC database are marked.
+  const fb = $('#fbrowser');
+  async function browseTo(path) {
+    let r;
+    try { r = await api('browse?path=' + encodeURIComponent(path || '')); }
+    catch (e) { if (path) return browseTo(''); return toast(e.message, 'err'); }
+    fb.hidden = false;
+    const icon = f => f.game ? '🏏' : '📁';
+    fb.innerHTML = `<div class="fb-roots">${r.roots.map(x => `<button class="ghost" data-go="${esc(x.path)}">${esc(x.name)}</button>`).join('')}</div>
+      ${r.path ? `<div class="fb-path"><button class="ghost" data-go="${esc(r.parent || '')}" ${r.parent ? '' : 'disabled'} title="Up one folder">↑ Up</button>
+        <span>${esc(r.path)}</span></div>` : '<div class="note" style="margin:8px 0">Pick a drive or folder to start.</div>'}
+      <div class="fb-list">${r.folders.map(f => `<div class="fb-row ${f.game ? 'game' : ''}" data-go="${esc(f.path)}">
+          <span>${icon(f)} ${esc(f.name)}</span>${f.game ? '<span class="fb-badge">ICC game found</span><button class="primary" data-open="' + esc(f.path) + '">Open</button>' : ''}</div>`).join('')
+        || (r.path ? '<div class="note" style="padding:10px">No folders here.</div>' : '')}</div>
+      ${r.path ? `<div class="actions"><button class="primary" id="fbOpen" ${r.game ? '' : 'disabled'}>Open this folder</button>
+        <span class="note">${r.game ? 'This folder holds an ICC database.' : 'Folders marked 🏏 hold an ICC database.'}</span>
+        <span class="spacer"></span><button class="ghost" id="fbClose">Close</button></div>` : ''}`;
+    fb.querySelectorAll('[data-go]').forEach(el => el.onclick = e => { if (e.target.closest('[data-open]')) return; browseTo(el.dataset.go); });
+    fb.querySelectorAll('[data-open]').forEach(b => b.onclick = () => openPath(b.dataset.open));
+    if ($('#fbOpen')) $('#fbOpen').onclick = () => openPath(r.path);
+    if ($('#fbClose')) $('#fbClose').onclick = () => { fb.hidden = true; };
+    const list = fb.querySelector('.fb-list'); if (list) list.scrollTop = 0;
+  }
+  $('#pathGo').onclick = () => openPath($('#pathIn').value.trim());
+  $('#chooserHelp').onclick = e => { e.preventDefault(); showHelp(); };
+  $('#pathIn').onkeydown = e => { if (e.key === 'Enter') openPath($('#pathIn').value.trim()); };
+  m.querySelectorAll('[data-path]').forEach(r => r.onclick = () => openPath(r.dataset.path));
+}
+
+/* ----------------------------------------------------------- help guide */
+let HELP_HTML = null;
+async function showHelp() {
+  if (pending && !confirmLeave()) return;
+  if (!HELP_HTML) HELP_HTML = await (await fetch('/help.html')).text();
+  const m = $('#main'); m.className = 'full';
+  document.querySelectorAll('#tabs button').forEach(x => x.classList.remove('on'));
+  m.innerHTML = `<div class="detail"><div style="max-width:880px;margin:0 auto">
+    <div class="actions" style="margin:0 0 14px"><button class="ghost" id="helpBack">← Back to the editor</button></div>${HELP_HTML}</div></div>`;
+  m.querySelectorAll('.appversion').forEach(e => e.textContent = META && META.version ? 'version ' + META.version : '');
+  m.querySelectorAll('.toc a').forEach(a => a.onclick = e => { e.preventDefault(); const t = m.querySelector(a.getAttribute('href')); if (t) t.scrollIntoView({ behavior: 'smooth' }); });
+  $('#helpBack').onclick = () => {
+    if (META.needs_folder) return renderChooser(META);
+    document.querySelectorAll('#tabs button').forEach(x => x.classList.toggle('on', x.dataset.tab === tab));
+    render();
+  };
+}
+$('#helpbtn').onclick = showHelp;
+
+$('#switchgame').onclick = async () => {
+  if ((!$('#save').disabled || pending) && !window.confirm('You have changes that are not saved to the game files. Discard them and open another game?')) return;
+  pending = false;
+  renderChooser(await api('app'));
+};
+setInterval(() => fetch('/api/ping').catch(() => {}), 10000);   // lets an app-mode editor quit once its window is gone
+
+/* ------------------------------------------------------------- players */
+function teamOptions(selected) {
+  return '<option value="0">None</option>' + TEAMS.map(t => `<option value="${t.id}" ${t.id === selected ? 'selected' : ''}>${esc(t.name)}</option>`).join('');
+}
+
+// Search / filter / sort / scroll survive re-renders, so applying an edit never loses your place.
+const PLIST = { q: '', ft: '', fn: '', sort: 'name', scroll: 0 };
+const nationFilterOptions = () => {
+  const n = {}; PLAYERS.forEach(p => { const k = p.nation || ''; n[k] = (n[k] || 0) + 1; });
+  return '<option value="">All nationalities</option>' + Object.keys(n).filter(Boolean).sort()
+    .map(k => `<option value="${esc(k)}" ${k === PLIST.fn ? 'selected' : ''}>${esc(k)} (${n[k]})</option>`).join('')
+    + (n[''] ? `<option value="-" ${PLIST.fn === '-' ? 'selected' : ''}>No nationality (${n['']})</option>` : '');
+};
+const teamFilterOptions = () => '<option value="">All teams</option>' + TEAMS.filter(t => t.players).map(t => `<option value="${t.id}" ${String(t.id) === PLIST.ft ? 'selected' : ''}>${esc(t.name)} (${t.players})</option>`).join('');
+let drawPlayerList = () => {};
+
+// Refresh list data after an edit without rebuilding the page.
+async function refreshPlayers() {
+  PLAYERS = await api('players'); TEAMS = await api('teams');
+  if (!$('#plist')) return;
+  $('#ft').innerHTML = teamFilterOptions();
+  $('#fn').innerHTML = nationFilterOptions();
+  drawPlayerList();
+}
+
+function renderPlayers(m) {
+  m.innerHTML = `
+    <aside>
+      <div class="filters">
+        <input id="q" placeholder="Search name…" autocomplete="off">
+        <select id="ft">${teamFilterOptions()}</select>
+        <select id="fn">${nationFilterOptions()}</select>
+        <select id="sort"><option value="name">Sort: surname</option><option value="bat">Sort: batting (best first)</option><option value="bowl">Sort: bowling (best first)</option></select>
+        <button class="ghost" id="newp">+ New player</button>
+      </div>
+      <div class="list" id="plist"></div>
+    </aside>
+    <div class="detail" id="pdetail"><div class="empty">Select a player</div></div>`;
+  $('#q').value = PLIST.q; $('#sort').value = PLIST.sort;
+  const list = $('#plist');
+  list.onscroll = () => { PLIST.scroll = list.scrollTop; };
+  const draw = drawPlayerList = () => {
+    PLIST.q = $('#q').value; PLIST.ft = $('#ft').value; PLIST.fn = $('#fn').value; PLIST.sort = $('#sort').value;
+    const q = PLIST.q.trim().toLowerCase(), ft = PLIST.ft, fn = PLIST.fn, s = PLIST.sort;
+    let rows = PLAYERS.filter(p => (!q || p.name.toLowerCase().includes(q)) && (!ft || p.team == ft) &&
+      (!fn || (fn === '-' ? !p.nation : p.nation === fn)));
+    const sur = p => p.name.split(' ').slice(-1)[0];
+    rows.sort(s === 'bat' ? (a, b) => b.batting - a.batting : s === 'bowl' ? (a, b) => a.bowling - b.bowling : (a, b) => sur(a).localeCompare(sur(b)));
+    $('#plist').innerHTML = rows.slice(0, 600).map(p => `
+      <div class="row ${p.index === sel ? 'on' : ''}" data-i="${p.index}">
+        <div>${esc(p.name)}${p.wicketkeeper ? ' <span class="sub">(wk)</span>' : ''}</div>
+        <div class="nums">bat ${p.batting} · bowl ${p.bowling}</div>
+        <div class="sub">${esc(p.team_name || '—')}${p.nation ? ' · ' + esc(p.nation) : ''}</div>
+      </div>`).join('') + (rows.length > 600 ? `<div class="empty">${rows.length - 600} more — refine the search</div>` : '');
+    list.scrollTop = PLIST.scroll;
+    list.querySelectorAll('.row').forEach(r => r.onclick = () => {
+      if (pending && !confirmLeave()) return;
+      sel = +r.dataset.i;
+      list.querySelectorAll('.row.on').forEach(x => x.classList.remove('on')); r.classList.add('on');
+      showPlayer(sel);
+    });
+  };
+  // A new search starts from the top; everything else keeps the scroll position.
+  ['q', 'ft', 'fn', 'sort'].forEach(id => $('#' + id).oninput = () => { PLIST.scroll = 0; draw(); });
+  $('#newp').onclick = () => { if (pending && !confirmLeave()) return; newPlayerForm(); };
+  draw();
+  if (sel !== null) showPlayer(sel);
+}
+
+function fieldInput(f, v) {
+  const id = 'f_' + f.name;
+  if (f.max === 1) return `<label class="chk"><input type="checkbox" id="${id}" ${v ? 'checked' : ''}> ${esc(f.label)}</label>`;
+  const enums = f.name === 'bowler_type' ? META.bowler_types : f.name === 'bat_type' ? META.bat_types : f.name === 'national_team' ? META.national_teams : null;
+  if (enums) return `<label class="f">${esc(f.label)}<select id="${id}">${Object.entries(enums).map(([k, t]) => `<option value="${k}" ${+k === v ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select></label>`;
+  // ICC 2 stores most abilities as plain decimal numbers
+  if (f.kind === 'float' || f.max === null || f.max > 1000) return `<label class="f">${esc(f.label)}<input type="number" id="${id}" step="${f.kind === 'float' ? '0.01' : '1'}" value="${v}"></label>`;
+  const shown = x => f.lo === null ? x : (f.lo + x * (f.hi - f.lo) / f.max).toFixed(f.hi < 10 ? 2 : 0);
+  return `<label class="f">${esc(f.label)} <span class="v" id="${id}_v">${shown(v)}${f.lo !== null ? ` <span class="note">(raw ${v}/${f.max})</span>` : ` <span class="note">/ ${f.max}</span>`}</span>
+    <div class="slider"><input type="range" id="${id}" min="0" max="${f.max}" value="${v}" data-lo="${f.lo}" data-hi="${f.hi}"><input type="number" id="${id}_n" min="0" max="${f.max}" value="${v}"></div></label>`;
+}
+
+// ICC 2006 stores batting / bowling ability as decimals rather than 0..511 steps.
+function floatAbility(group, p) {
+  if (!META.float_abilities) return '';
+  if (group === 'Batting') return `<label class="f">Batting ability <span class="note">(higher = better)</span><input id="batting_value" type="number" step="0.01" min="0" max="400" value="${p.batting_value}"></label>`;
+  if (group === 'Bowling') return `<label class="f">Bowling ability <span class="note">(lower = better)</span><input id="bowling_value" type="number" step="0.01" min="0" max="400" value="${p.bowling_value}"></label>`;
+  return '';
+}
+
+async function showPlayer(i) {
+  const p = await api('players/' + i);
+  pending = false;
+  const d = $('#pdetail');
+  const byGroup = {};
+  META.fields.forEach(f => (byGroup[f.group] = byGroup[f.group] || []).push(f));
+  const dup = META.duplicate_keys.includes(p.key);
+  const groups = [['Batting', 'Batting'], ['Bowling', 'Bowling'], ['Fielding', 'Fielding & role', ['Role']], ['Personal', 'Nationality & contract'], ['Fitness', 'Fitness'], ['Status', 'Season state (usually leave alone)']];
+  d.innerHTML = `
+    <h2>${esc(p.first_name)} ${esc(p.surname)}</h2>
+    <div class="meta">Player #${p.ref} · map key ${p.key} · ${esc(teamName(p.team))}${p.injured ? ' · <b>injured</b>' : ''}</div>
+    ${dup ? `<div class="banner">Another player shares map key ${p.key}. The game keeps only one of them when it loads, so one of the two is probably invisible in-game.</div>` : ''}
+    ${META.career_records === false ? '' : `<div class="subtabs">${[['details', 'Details'], ['stats', 'Stats']].map(([k, l]) => `<button data-pt="${k}" class="${PTAB === k ? 'on' : ''}">${l}</button>`).join('')}</div>`}
+    <div class="ptab" data-ptab="details">
+    <section class="card"><h3>Identity</h3><div class="grid">
+      <label class="f">First name<input id="first_name" value="${esc(p.first_name)}"></label>
+      <label class="f">Surname<input id="surname" value="${esc(p.surname)}"></label>
+      <label class="f">Initials<input id="initials" value="${esc(p.initials)}"></label>
+      <label class="f">Date of birth<input id="birthday" type="date" value="${p.birthday}"></label>
+      <label class="f">County / domestic team<select id="team">${teamOptions(p.team)}</select></label>
+      <label class="f">National team<select id="nationality">${Object.entries(META.national_teams).map(([k, t]) => `<option value="${k}" ${+k === p.nationality ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select></label>
+      ${META.float_abilities ? `<label class="chk"><input type="checkbox" id="england_contracted" ${p.england_contracted ? 'checked' : ''}> England central contract</label>` : ''}
+      <label class="f">Wage (£)<input id="wage" type="number" step="500" min="0" value="${p.wage}"></label>
+      <label class="f">Expected wage (£)<input id="expected_wage" type="number" step="500" min="0" value="${p.expected_wage}"></label>
+      <label class="f">Minimum wage (£)<input id="minimum_wage" type="number" step="500" min="0" value="${p.minimum_wage}"></label>
+    </div>
+    <label class="f" style="margin-top:10px">Notes<textarea id="notes">${esc(p.notes)}</textarea></label></section>
+    ${groups.map(([g, title, extra]) => `<section class="card"><h3>${title}</h3><div class="grid">${floatAbility(g, p)}${[...(byGroup[g] || []), ...((extra || []).flatMap(x => byGroup[x] || []))].map(f => fieldInput(f, p.fields[f.name])).join('')}</div></section>`).join('')}
+    </div>
+    <div class="ptab" data-ptab="stats">
+    ${META.career_records === false ? '' : recordTable('Batting & fielding records', 'bat', p.batting_records, ['matches','innings','not_outs','runs','highest','highest_not_out','centuries','fifties','balls','caught','stumped','debut'])}
+    ${META.career_records === false ? '' : recordTable('Bowling records', 'bowl', p.bowling_records, ['balls','runs','wickets','best_wickets','best_runs','five_wickets','ten_wickets'])}
+    </div>
+    <div class="actions actionbar"><button class="primary" id="apply">Apply changes</button><button class="ghost" id="revert">Revert</button><span class="note" id="dirtynote"></span><span class="spacer"></span><button class="ghost danger" id="delp">Delete player</button></div>`;
+
+  d.querySelectorAll('input[type=range]').forEach(r => {
+    const n = $('#' + r.id + '_n'), v = $('#' + r.id + '_v'), f = META.fields.find(x => 'f_' + x.name === r.id);
+    const sync = x => { r.value = n.value = x; v.innerHTML = (f.lo === null ? x : (f.lo + x * (f.hi - f.lo) / f.max).toFixed(f.hi < 10 ? 2 : 0)) + (f.lo !== null ? ` <span class="note">(raw ${x}/${f.max})</span>` : ` <span class="note">/ ${f.max}</span>`); };
+    r.oninput = () => sync(r.value); n.oninput = () => sync(Math.max(0, Math.min(f.max, +n.value || 0)));
+  });
+  const showTab = k => {
+    PTAB = META.career_records === false ? 'details' : k;
+    d.querySelectorAll('.ptab').forEach(t => t.hidden = t.dataset.ptab !== PTAB);
+    d.querySelectorAll('.subtabs button').forEach(b => b.classList.toggle('on', b.dataset.pt === PTAB));
+  };
+  d.querySelectorAll('.subtabs button').forEach(b => b.onclick = () => showTab(b.dataset.pt));
+  showTab(PTAB);
+  d.oninput = d.onchange = () => { pending = true; $('#dirtynote').textContent = 'Not applied yet'; };
+  wireRecordTables(d);
+  $('#revert').onclick = () => showPlayer(i);
+  $('#delp').onclick = async () => {
+    if (!window.confirm(`Delete ${p.first_name} ${p.surname}? They are also removed from every squad and picked XI.`)) return;
+    try { await api('players/' + i, { method: 'DELETE' }); setDirty(true); sel = null; pending = false; await refreshPlayers(); $('#pdetail').innerHTML = '<div class="empty">Select a player</div>'; toast('✓ Deleted — remember to save to game files', 'ok'); }
+    catch (e) { toast('Not deleted: ' + e.message, 'err'); }
+  };
+  $('#apply').onclick = () => applying($('#apply'), async () => {
+    const body = { fields: {} };
+    ['first_name', 'surname', 'initials', 'notes', 'birthday', 'team', 'nationality', 'wage', 'expected_wage', 'minimum_wage'].forEach(k => body[k] = $('#' + k).value);
+    if (META.float_abilities) { body.batting_value = +$('#batting_value').value; body.bowling_value = +$('#bowling_value').value; body.england_contracted = $('#england_contracted').checked; }
+    META.fields.forEach(f => { const el = $('#f_' + f.name); body.fields[f.name] = f.max === 1 ? (el.checked ? 1 : 0) : +el.value; });
+    if (META.career_records !== false) { body.batting_records = readRecords(d, 'bat'); body.bowling_records = readRecords(d, 'bowl'); }
+    await api('players/' + i, { method: 'PUT', body: JSON.stringify(body) });
+    pending = false; setDirty(true);
+    const scroll = d.scrollTop;
+    await refreshPlayers();
+    await showPlayer(i);        // show the stored values, at the same place in the form
+    d.scrollTop = scroll;
+  });
+}
+
+function newPlayerForm() {
+  const tmplOpts = PLAYERS.slice().sort((a, b) => a.name.localeCompare(b.name)).map(p => `<option value="${p.index}" ${p.index === sel ? 'selected' : ''}>${esc(p.name)} (bat ${p.batting}, bowl ${p.bowling})</option>`).join('');
+  $('#pdetail').innerHTML = `<h2>New player</h2><div class="meta">The new player copies abilities from a template player and starts with no career records.</div>
+    <section class="card"><div class="grid">
+      <label class="f">First name<input id="np_first"></label>
+      <label class="f">Surname<input id="np_sur"></label>
+      <label class="f">Initials (optional)<input id="np_ini"></label>
+      <label class="f">County / domestic team<select id="np_team">${teamOptions(0)}</select></label>
+      <label class="f" style="grid-column:1/-1">Copy abilities from<select id="np_tmpl">${tmplOpts}</select></label>
+    </div><div class="actions"><button class="primary" id="np_go">Create player</button></div></section>`;
+  $('#np_go').onclick = async () => {
+    try {
+      const p = await api('players', { method: 'POST', body: JSON.stringify({ first_name: $('#np_first').value, surname: $('#np_sur').value, initials: $('#np_ini').value, team: +$('#np_team').value, template: +$('#np_tmpl').value }) });
+      setDirty(true); sel = p.index; await refreshPlayers(); showPlayer(sel); toast('✓ Created — edit their details, then save to game files', 'ok');
+    } catch (e) { toast('Not created: ' + e.message, 'err'); }
+  };
+}
+
+const LABEL = { matches:'M', innings:'Inn', not_outs:'NO', runs:'Runs', highest:'HS', highest_not_out:'HS*', centuries:'100', fifties:'50', balls:'Balls', caught:'Ct', stumped:'St', debut:'Debut', wickets:'Wkts', best_wickets:'BB w', best_runs:'BB r', five_wickets:'5w', ten_wickets:'10m' };
+function recordTable(title, kind, recs, cols) {
+  const used = Object.keys(recs).map(Number);
+  const free = META.record_types.map((t, i) => [i, t]).filter(([i]) => !used.includes(i));
+  return `<section class="card" data-kind="${kind}"><h3>${title}</h3><div class="tablewrap"><table>
+    <thead><tr><th>Record</th>${cols.map(c => `<th>${LABEL[c]}</th>`).join('')}<th></th></tr></thead>
+    <tbody>${Object.entries(recs).map(([k, r]) => recordRow(kind, k, r, cols)).join('')}</tbody></table></div>
+    <div class="actions"><select class="addtype" style="width:auto">${free.map(([i, t]) => `<option value="${i}">${esc(t)}</option>`).join('')}</select><button class="ghost addrec" ${free.length ? '' : 'disabled'}>Add record</button></div></section>`;
+}
+const recordRow = (kind, k, r, cols) => `<tr data-k="${k}"><td>${esc(META.record_types[k])}</td>${cols.map(c => `<td><input data-c="${c}" type="number" min="0" value="${r[c] ?? 0}"></td>`).join('')}<td><button class="ghost delrec" title="Remove">✕</button></td></tr>`;
+function wireRecordTables(d) {
+  d.querySelectorAll('section[data-kind]').forEach(sec => {
+    const cols = [...sec.querySelectorAll('thead th')].slice(1, -1).map(th => Object.keys(LABEL).find(k => LABEL[k] === th.textContent));
+    const wireDel = () => sec.querySelectorAll('.delrec').forEach(b => b.onclick = () => { b.closest('tr').remove(); d.oninput(); });
+    wireDel();
+    sec.querySelector('.addrec').onclick = () => {
+      const s = sec.querySelector('.addtype'); if (!s.value) return;
+      sec.querySelector('tbody').insertAdjacentHTML('beforeend', recordRow(sec.dataset.kind, s.value, {}, cols));
+      s.querySelector(`option[value="${s.value}"]`).remove(); wireDel(); d.oninput();
+    };
+  });
+}
+function readRecords(d, kind) {
+  const out = {};
+  d.querySelectorAll(`section[data-kind=${kind}] tbody tr`).forEach(tr => {
+    const r = {}; tr.querySelectorAll('input').forEach(i => r[i.dataset.c] = +i.value || 0); out[tr.dataset.k] = r;
+  });
+  return out;
+}
+
+/* --------------------------------------------------------------- teams */
+let tsel = null;
+async function renderTeams(m) {
+  TEAMS = await api('teams');
+  m.className = '';
+  m.innerHTML = `<aside><div class="filters"><input id="tq" placeholder="Search team…" autocomplete="off">
+      <select id="tf"><option value="">All teams</option><option value="club">Teams with squads</option><option value="nat">National sides</option></select></div>
+      <div class="list" id="tlist"></div></aside><div class="detail" id="tdetail"><div class="empty">Select a team</div></div>`;
+  const draw = () => {
+    const q = $('#tq').value.trim().toLowerCase(), f = $('#tf').value;
+    const rows = TEAMS.filter(t => (!q || t.name.toLowerCase().includes(q)) && (!f || (f === 'club' ? t.squad !== null : t.national)));
+    $('#tlist').innerHTML = rows.map(t => `<div class="row ${t.index === tsel ? 'on' : ''}" data-i="${t.index}"><div>${esc(t.name)}</div>
+      <div class="nums">${t.squad !== null ? t.squad + ' in squad' : ''}</div><div class="sub">#${t.id} · ${esc(t.short_name)} · ${esc(t.abbrev)}${t.national ? ' · national side' : ''}</div></div>`).join('');
+    $('#tlist').querySelectorAll('.row').forEach(r => r.onclick = () => { if (pending && !confirmLeave()) return; tsel = +r.dataset.i; draw(); showTeam(tsel); });
+  };
+  $('#tq').oninput = $('#tf').onchange = draw;
+  draw();
+  if (tsel !== null) showTeam(tsel);
+}
+
+const ROLE_LABELS = { captain: 'Captain', keeper: 'Wicketkeeper', opening_bowler1: 'Opening bowler 1', opening_bowler2: 'Opening bowler 2' };
+const MONEY_LABELS = { yearly_income: 'Yearly income', extra_income: 'Extra income this year', youth_budget: 'Youth team budget', physio_budget: 'Physio budget', coaching_budget: 'Coaching budget', extra_costs: 'Extra costs' };
+
+async function showTeam(i) {
+  const t = await api('teams/' + i);
+  pending = false;
+  const c = t.club;
+  let squad = c ? c.squad.map(x => x.key) : [], picked = c ? c.selected.map(x => x.key) : [];
+  const info = {}; if (c) [...c.squad, ...c.selected].forEach(x => info[x.key] = x);
+  const d = $('#tdetail');
+  const draw = () => {
+    const roleSel = (f, cur) => `<label class="f">${ROLE_LABELS[f]}<select data-role="${f}"><option value="">None</option>${picked.map((k, j) => `<option value="${j}" ${cur === j ? 'selected' : ''}>${esc(info[k]?.name || k)}</option>`).join('')}</select></label>`;
+    const roles = c ? Object.fromEntries(Object.keys(ROLE_LABELS).map(f => { const el = d.querySelector(`[data-role=${f}]`); return [f, el ? (el.value === '' ? null : +el.value) : c.roles[f]]; })) : {};
+    d.innerHTML = `<h2>${esc(t.name)}</h2><div class="meta">Team #${t.id}${c ? (c.national ? ' · national side' : '') : ' · name only (no squad in the player file)'}</div>
+      <section class="card"><h3>Names</h3><div class="grid">
+        <label class="f">Name<input data-k="name" value="${esc(t.name)}"></label>
+        <label class="f">Short name<input data-k="short_name" value="${esc(t.short_name)}"></label>
+        <label class="f">Abbreviation<input data-k="abbrev" value="${esc(t.abbrev)}"></label></div></section>
+      ${c ? `
+      <section class="card"><h3>Picked XI (batting order)</h3>
+        <div class="tablewrap"><table><thead><tr><th>#</th><th class="name">Player</th><th>Bat</th><th>Bowl</th><th></th></tr></thead><tbody>
+        ${picked.map((k, j) => `<tr><td>${j + 1}</td><td class="name">${esc(info[k]?.name || k)}${info[k]?.wicketkeeper ? ' <span class="note">(wk)</span>' : ''}</td><td>${info[k]?.batting ?? ''}</td><td>${info[k]?.bowling ?? ''}</td>
+          <td><button class="ghost" data-up="${j}" ${j ? '' : 'disabled'}>↑</button> <button class="ghost" data-down="${j}" ${j < picked.length - 1 ? '' : 'disabled'}>↓</button> <button class="ghost" data-drop="${j}">Drop</button></td></tr>`).join('')}
+        </tbody></table></div>
+        <p class="note">${picked.length} picked${picked.length !== 11 ? ' — the game expects 11' : ''}.</p>
+        <div class="grid">${Object.keys(ROLE_LABELS).map(f => roleSel(f, roles[f])).join('')}</div></section>
+      <section class="card"><h3>Squad (${squad.length})</h3>
+        <div class="tablewrap"><table><thead><tr><th style="text-align:left">Player</th><th>Bat</th><th>Bowl</th><th></th></tr></thead><tbody>
+        ${squad.map(k => `<tr><td>${esc(info[k]?.name || k)}${info[k]?.wicketkeeper ? ' <span class="note">(wk)</span>' : ''}</td><td>${info[k]?.batting ?? ''}</td><td>${info[k]?.bowling ?? ''}</td>
+          <td>${picked.includes(k) ? '<span class="note">in XI</span>' : `<button class="ghost" data-pick="${k}">Pick</button>`} <button class="ghost" data-remove="${k}">Remove</button></td></tr>`).join('')}
+        </tbody></table></div>
+        <div class="actions"><input id="addq" list="addlist" placeholder="Add a player to the squad…" style="max-width:320px"><datalist id="addlist">${PLAYERS.filter(p => !squad.includes(p.key)).map(p => `<option value="${esc(p.name)} [${p.key}]">${esc(p.team_name || 'no team')}</option>`).join('')}</datalist><button class="ghost" id="addbtn">Add</button>
+        <span class="note">${c.national ? '' : 'Adding moves the player from their current county; removing leaves them without a county.'}</span></div></section>
+      <section class="card"><h3>Club</h3><div class="grid">
+        <label class="f">Year founded<input type="number" id="c_year" value="${c.year_founded}"></label>
+        <label class="f">Kit colour (0–255)<input type="number" id="c_colour" min="0" max="255" value="${c.colour}"></label>
+        ${Object.keys(c.money).map(f => `<label class="f">${MONEY_LABELS[f] || f} (£)<input type="number" min="0" data-money="${f}" value="${c.money[f]}"></label>`).join('')}
+      </div></section>` : ''}
+      <div class="actions actionbar"><button class="primary" id="tapply">Apply changes</button><button class="ghost" id="trevert">Revert</button><span class="note" id="tnote"></span></div>`;
+    const touched = () => { pending = true; $('#tnote').textContent = 'Not applied yet'; };
+    d.oninput = d.onchange = touched;
+    const redraw = () => { touched(); draw(); $('#tnote').textContent = 'Not applied yet'; };
+    d.querySelectorAll('[data-up]').forEach(b => b.onclick = () => { const j = +b.dataset.up; [picked[j - 1], picked[j]] = [picked[j], picked[j - 1]]; remapRoles(j, j - 1); redraw(); });
+    d.querySelectorAll('[data-down]').forEach(b => b.onclick = () => { const j = +b.dataset.down; [picked[j + 1], picked[j]] = [picked[j], picked[j + 1]]; remapRoles(j, j + 1); redraw(); });
+    d.querySelectorAll('[data-drop]').forEach(b => b.onclick = () => { dropAt(+b.dataset.drop); redraw(); });
+    d.querySelectorAll('[data-pick]').forEach(b => b.onclick = () => { picked.push(+b.dataset.pick); redraw(); });
+    d.querySelectorAll('[data-remove]').forEach(b => b.onclick = () => { const k = +b.dataset.remove; if (picked.includes(k)) dropAt(picked.indexOf(k)); squad = squad.filter(x => x !== k); redraw(); });
+    const add = $('#addbtn'); if (add) add.onclick = () => {
+      const m = /\[(\d+)\]$/.exec($('#addq').value.trim()); if (!m) return toast('Pick a player from the list');
+      const k = +m[1], p = PLAYERS.find(x => x.key === k); if (!p || squad.includes(k)) return;
+      squad.push(k); info[k] = { key: k, name: p.name, batting: p.batting, bowling: p.bowling, wicketkeeper: p.wicketkeeper }; redraw();
+    };
+    function remapRoles(a, b) { d.querySelectorAll('[data-role]').forEach(s => { if (s.value === String(a)) s.value = b; else if (s.value === String(b)) s.value = a; }); }
+    function dropAt(j) { picked.splice(j, 1); d.querySelectorAll('[data-role]').forEach(s => { if (s.value === '') return; const v = +s.value; if (v === j) s.value = ''; else if (v > j) s.value = v - 1; }); }
+    $('#trevert').onclick = () => showTeam(i);
+    $('#tapply').onclick = () => applying($('#tapply'), async () => {
+      const body = {}; d.querySelectorAll('[data-k]').forEach(el => body[el.dataset.k] = el.value);
+      if (c) {
+        body.club = { squad, selected: picked, roles: {}, money: {}, year_founded: +$('#c_year').value, colour: +$('#c_colour').value };
+        d.querySelectorAll('[data-role]').forEach(s => body.club.roles[s.dataset.role] = s.value === '' ? null : +s.value);
+        d.querySelectorAll('[data-money]').forEach(el => body.club.money[el.dataset.money] = +el.value || 0);
+      }
+      await api('teams/' + i, { method: 'PUT', body: JSON.stringify(body) }); pending = false; setDirty(true);
+      TEAMS = await api('teams'); PLAYERS = await api('players'); await renderTeams($('#main'));
+    });
+  };
+  draw();
+}
+
+async function renderGrounds(m) {
+  const gs = await api('grounds');
+  m.innerHTML = `<div class="detail"><h2>Grounds</h2><div class="meta">${gs.length} grounds.</div>
+    ${gs.map(g => `<section class="card" data-i="${g.index}"><div class="grid">
+      ${['name', 'full_name', 'address', 'town'].map(k => `<label class="f">${k.replace('_', ' ')}<input data-k="${k}" value="${esc(g[k])}"></label>`).join('')}</div>
+      <label class="f" style="margin-top:10px">Description<textarea data-k="description">${esc(g.description)}</textarea></label>
+      <div class="actions"><button class="ghost" data-apply>Apply</button><span class="note">Ground #${g.id}</span></div></section>`).join('')}</div>`;
+  wireRowApply(m, 'grounds');
+}
+
+function wireRowApply(m, kind, after) {
+  m.querySelectorAll('[data-apply]').forEach(b => b.onclick = () => applying(b, async () => {
+    const box = b.closest('[data-i]'), body = {};
+    box.querySelectorAll('[data-k]').forEach(el => body[el.dataset.k] = el.value);
+    await api(`${kind}/${box.dataset.i}`, { method: 'PUT', body: JSON.stringify(body) }); setDirty(true); after && after();
+  }));
+}
+
+/* ------------------------------------------------------------- records */
+const RECORD_OWNERS = r => r.owner || `Record book ${r.index + 1}`;
+async function renderRecords(m) {
+  const recs = await api('records');
+  const teamSel = (v, path) => `<select data-p="${path}" data-t="int" style="width:150px">${teamOptions(v)}</select>`;
+  const num = (v, path, w = 64) => `<input data-p="${path}" data-t="int" type="number" min="0" value="${v}" style="width:${w}px">`;
+  const txt = (v, path) => `<input data-p="${path}" data-t="str" class="wide" value="${esc(v)}">`;
+  m.innerHTML = `<div class="detail"><h2>Club records</h2><div class="meta">Record book shown in the game for the 18 counties and 9 Test nations.</div>
+    <select id="rsel" style="width:260px;margin-bottom:14px">${recs.map((r, pos) => `<option value="${pos}">${esc(RECORD_OWNERS(r))}</option>`).join('')}</select><div id="rbody"></div></div>`;
+  const show = i => {
+    const r = recs[i];
+    $('#rbody').innerHTML = `<section class="card" data-i="${i}"><h3>Partnership records by wicket</h3><div class="tablewrap"><table>
+      <thead><tr><th>Wkt</th><th style="text-align:left">Batter 1</th><th style="text-align:left">Batter 2</th><th>Runs</th><th>Not out</th><th>Opponent</th><th>Year</th></tr></thead><tbody>
+      ${r.partnerships.map((p, k) => `<tr><td>${k + 1}</td><td>${txt(p.batter1, `partnerships.${k}.batter1`)}</td><td>${txt(p.batter2, `partnerships.${k}.batter2`)}</td><td>${num(p.runs, `partnerships.${k}.runs`)}</td>
+        <td><input type="checkbox" data-p="partnerships.${k}.not_out" data-t="bool" ${p.not_out ? 'checked' : ''} style="width:auto"></td><td>${teamSel(p.opponent, `partnerships.${k}.opponent`)}</td><td>${num(p.year, `partnerships.${k}.year`)}</td></tr>`).join('')}
+      </tbody></table></div>
+      <h3 style="margin-top:18px">Team and individual records</h3><div class="tablewrap"><table><tbody>
+      <tr><td>Highest total</td><td>${num(r.highest_total.runs, 'highest_total.runs')} v ${teamSel(r.highest_total.opponent, 'highest_total.opponent')} in ${num(r.highest_total.year, 'highest_total.year')}</td></tr>
+      <tr><td>Lowest total</td><td>${num(r.lowest_total.runs, 'lowest_total.runs')} v ${teamSel(r.lowest_total.opponent, 'lowest_total.opponent')} in ${num(r.lowest_total.year, 'lowest_total.year')}</td></tr>
+      <tr><td>Most runs in a season</td><td>${txt(r.most_runs_season.player, 'most_runs_season.player')} ${num(r.most_runs_season.value, 'most_runs_season.value')} in ${num(r.most_runs_season.year, 'most_runs_season.year')}</td></tr>
+      <tr><td>Most wickets in a season</td><td>${txt(r.most_wickets_season.player, 'most_wickets_season.player')} ${num(r.most_wickets_season.value, 'most_wickets_season.value')} in ${num(r.most_wickets_season.year, 'most_wickets_season.year')}</td></tr>
+      ${['best_bowling_match', 'best_bowling_innings'].map(k => `<tr><td>${k === 'best_bowling_match' ? 'Best bowling (match)' : 'Best bowling (innings)'}</td><td>${txt(r[k].player, k + '.player')} ${num(r[k].wickets, k + '.wickets', 50)}–${num(r[k].runs, k + '.runs', 60)} v ${teamSel(r[k].opponent, k + '.opponent')} at ${txt(r[k].venue, k + '.venue')} ${num(r[k].year, k + '.year')}</td></tr>`).join('')}
+      <tr><td>Highest score</td><td>${txt(r.highest_score.player, 'highest_score.player')} ${num(r.highest_score.runs, 'highest_score.runs')} v ${teamSel(r.highest_score.opponent, 'highest_score.opponent')} at ${txt(r.highest_score.venue, 'highest_score.venue')} ${num(r.highest_score.year, 'highest_score.year')}</td></tr>
+      </tbody></table></div>
+      <div class="actions"><button class="primary" id="rapply">Apply changes</button></div></section>`;
+    $('#rapply').onclick = () => applying($('#rapply'), async () => {
+      const body = {};
+      $('#rbody').querySelectorAll('[data-p]').forEach(el => {
+        const v = el.dataset.t === 'bool' ? el.checked : el.dataset.t === 'int' ? +el.value || 0 : el.value;
+        const path = el.dataset.p.split('.'); let o = body;
+        path.slice(0, -1).forEach((k, j) => { const nk = path[j + 1]; o[k] = o[k] || (/^\d+$/.test(nk) ? [] : {}); o = o[k]; });
+        o[path.at(-1)] = v;
+      });
+      recs[i] = await api('records/' + r.index, { method: 'PUT', body: JSON.stringify(body) }); setDirty(true);
+    });
+  };
+  $('#rsel').onchange = e => show(+e.target.value);
+  show(0);
+}
+
+/* ------------------------------------------------------------ fixtures */
+// List state survives re-renders (same as the player list).
+const FLIST = { file: null, q: '', comp: '', scroll: 0, sel: null };
+let FX = null;
+const fmtDate = iso => new Date(iso + 'T12:00:00').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
+const ORD = n => n + ((n % 100 >= 11 && n % 100 <= 13) ? 'th' : ({ 1: 'st', 2: 'nd', 3: 'rd' }[n % 10] || 'th'));
+const CUP_ROUNDS = { 0: 'Final', 1: 'Semi-final', 2: 'Quarter-final', 3: 'Round 2', 4: 'Round 1' };
+function compDetail(f) {
+  const t = f.type, r = f.round;
+  if (r === 255) return '';
+  if (r >= 101 && r <= 110) return 'Division ' + (r - 100);
+  if ([6, 7].includes(t) && f.out_of !== 255) return `${ORD(r)} of ${f.out_of}`;
+  if (t === 5) return f.out_of !== 255 ? `match ${r} of ${f.out_of}` : CUP_ROUNDS[r] || 'round ' + r;
+  return CUP_ROUNDS[r] || 'round ' + r;
+}
+// Placeholders the game fills in as a competition progresses.
+const placeholder = v => v === 0 ? 'To be decided' : v >= 900 ? `Draw position ${v - 900}` : v >= 850 ? `Super Six place ${v - 849}` : `Empty slot ${v}`;
+const sideName = (f, k) => f[k + '_team'] || placeholder(f[k]);
+const fixtureTitle = f => `${esc(sideName(f, 'home'))} v ${esc(sideName(f, 'away'))}`;
+
+async function renderFixtures(m) {
+  const files = await api('fixtures');
+  if (!FLIST.file || !files.some(f => f.name === FLIST.file)) FLIST.file = files[0].name;
+  FX = await api('fixtures/' + encodeURIComponent(FLIST.file));
+  m.innerHTML = `
+    <aside>
+      <div class="filters">
+        <select id="fxfile">${files.map(f => `<option value="${esc(f.name)}" ${f.name === FLIST.file ? 'selected' : ''}>${esc(f.name)}${f.year ? ' — ' + f.year : ''} (${f.fixtures} fixtures)</option>`).join('')}</select>
+        <input id="fxq" placeholder="Search team…" autocomplete="off">
+        <select id="fxcomp"><option value="">All competitions</option>${Object.entries(FX.match_types).map(([k, t]) => `<option value="${k}">${esc(t.name)}</option>`).join('')}</select>
+        <div class="actions" style="margin:0"><button class="ghost" id="fxnew">+ New fixture</button><button class="ghost" id="fxkey">Fixture key</button></div>
+      </div>
+      <div class="list" id="fxlist"></div>
+    </aside>
+    <div class="detail" id="fxdetail"><div class="empty">Select a fixture</div></div>`;
+  $('#fxq').value = FLIST.q; $('#fxcomp').value = FLIST.comp;
+  const list = $('#fxlist');
+  list.onscroll = () => { FLIST.scroll = list.scrollTop; };
+  const draw = () => {
+    FLIST.q = $('#fxq').value; FLIST.comp = $('#fxcomp').value;
+    const q = FLIST.q.trim().toLowerCase();
+    const rows = FX.fixtures.filter(f => (!FLIST.comp || String(f.type) === FLIST.comp) &&
+      (!q || [f.home_team, f.away_team, f.plays_at].some(n => (n || '').toLowerCase().includes(q))))
+      .sort((a, b) => a.start - b.start || a.index - b.index);
+    let month = '';
+    list.innerHTML = rows.map(f => {
+      const mo = new Date(f.date + 'T12:00:00').toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
+      const head = mo !== month ? `<div class="row" style="cursor:default;background:var(--bg)"><b>${(month = mo)}</b></div>` : '';
+      return head + `<div class="row ${f.index === FLIST.sel ? 'on' : ''}" data-i="${f.index}">
+        <div>${fixtureTitle(f)}${f.day_night ? ' <span class="sub">(D/N)</span>' : ''}</div><div class="nums">${fmtDate(f.date).replace(/ \d{4}$/, '')}</div>
+        <div class="sub">${esc(f.competition)}${compDetail(f) ? ' · ' + esc(compDetail(f)) : ''}${f.plays_at ? ' · ' + esc(f.plays_at) : f.home_team ? ' · <b style="color:var(--warn)">no ground — set a venue</b>' : ''}</div></div>`;
+    }).join('') || '<div class="empty">No fixtures match</div>';
+    list.scrollTop = FLIST.scroll;
+    list.querySelectorAll('.row[data-i]').forEach(r => r.onclick = () => {
+      if (pending && !confirmLeave()) return;
+      FLIST.sel = +r.dataset.i;
+      list.querySelectorAll('.row.on').forEach(x => x.classList.remove('on')); r.classList.add('on');
+      showFixture(FLIST.sel);
+    });
+  };
+  ['fxq', 'fxcomp'].forEach(id => $('#' + id).oninput = () => { FLIST.scroll = 0; draw(); });
+  $('#fxfile').onchange = e => { if (pending && !confirmLeave()) { e.target.value = FLIST.file; return; } FLIST.file = e.target.value; FLIST.sel = null; FLIST.scroll = 0; renderFixtures(m); };
+  $('#fxnew').onclick = () => { if (pending && !confirmLeave()) return; FLIST.sel = null; showFixture(null); };
+  $('#fxkey').onclick = () => { if (pending && !confirmLeave()) return; FLIST.sel = null; draw(); showFixtureKey(); };
+  FX.redraw = draw;
+  draw();
+  if (FLIST.sel !== null && FX.fixtures[FLIST.sel]) showFixture(FLIST.sel);
+}
+
+function slotOptions(cur) {
+  const groups = {};
+  FX.slots.forEach(s => (groups[s.group] = groups[s.group] || []).push(s));
+  let html = Object.entries(groups).map(([g, ss]) => `<optgroup label="${esc(g)}">${ss.map(s => `<option value="${s.slot}" ${s.slot === cur ? 'selected' : ''}>${esc(s.name)} (slot ${s.slot})</option>`).join('')}</optgroup>`).join('');
+  if (!FX.slots.some(s => s.slot === cur)) html = `<option value="${cur}" selected>${esc(placeholder(cur))} (filled in by the game)</option>` + html;
+  return html;
+}
+
+function showFixture(i) {
+  const isNew = i === null;
+  const f = isNew ? { type: 0, round: 255, out_of: 255, tt: 255, day_night: 0, date: FX.season_start, home: FX.slots[0].slot, away: FX.slots[1].slot, ground: 0 } : FX.fixtures.find(x => x.index === i);
+  pending = false;
+  const d = $('#fxdetail');
+  const num = (id, v, help) => `<label class="f">${help}<input id="${id}" type="number" min="0" max="255" value="${v === 255 ? '' : v}" placeholder="—"></label>`;
+  d.innerHTML = `
+    <h2>${isNew ? 'New fixture' : fixtureTitle(f)}</h2>
+    <div class="meta">${isNew ? 'Added to ' + esc(FX.name) : `${esc(f.competition)}${compDetail(f) ? ' · ' + esc(compDetail(f)) : ''} · ${fmtDate(f.date)}${f.days > 1 ? ' – ' + fmtDate(f.end) : ''}${f.plays_at ? ' · ' + esc(f.plays_at) : ''}`}</div>
+    <section class="card"><h3>Match</h3><div class="grid">
+      <label class="f">Start date<input id="fx_date" type="date" min="${FX.season_start}" max="${FX.season_end}" value="${f.date}"></label>
+      <label class="f">Competition<select id="fx_type">${Object.entries(FX.match_types).map(([k, t]) => `<option value="${k}" ${+k === f.type ? 'selected' : ''}>${esc(t.name)} (${t.days} day${t.days > 1 ? 's' : ''})</option>`).join('')}</select></label>
+      <label class="f">Home side<select id="fx_home">${slotOptions(f.home)}</select></label>
+      <label class="f">Away side<select id="fx_away">${slotOptions(f.away)}</select></label>
+      <label class="f">Venue<select id="fx_ground"><option value="0">Home side's ground</option>${FX.venues.map(v => `<option value="${v.id}" ${v.id === f.ground ? 'selected' : ''}>${esc(v.name)}</option>`).join('')}${f.ground && !FX.venues.some(v => v.id === f.ground) ? `<option value="${f.ground}" selected>#${f.ground}</option>` : ''}</select></label>
+      <label class="chk"><input type="checkbox" id="fx_dn" ${f.day_night ? 'checked' : ''}> Day/night match</label>
+    </div></section>
+    <section class="card"><h3>Series &amp; round</h3><div class="grid">
+      ${num('fx_round', f.round, 'Round / division / match no.')}
+      ${num('fx_out_of', f.out_of, 'Series length')}
+      ${num('fx_tt', f.tt, 'Tournament no. (triangular series)')}
+    </div><p class="note">Leagues: division 101 = Division 1, 102 = Division 2. Cups: 0 = final, 1 = semi-final, 2 = quarter-final, 3 = round 2, 4 = round 1.
+      Tests and ODIs: match number and series length (e.g. 2 of 3). Leave blank when not used.</p></section>
+    <p class="note">Teams are chosen by fixture-key slot. The same county can sit in a Championship slot and a National League slot; pick the slot for this competition.
+      International rotation slots change from season to season, so the team shown is this season's.
+      Venue “Home side's ground”: the game uses the home side's first ground; a Test nation hosting the 2nd match of a series uses its 2nd ground, and so on; domestic cup finals go to Lord's.</p>
+    <div class="actions actionbar"><button class="primary" id="fxapply">${isNew ? 'Add fixture' : 'Apply changes'}</button>${isNew ? '' : '<button class="ghost" id="fxrevert">Revert</button><button class="ghost" id="fxcopy">Duplicate</button>'}<span class="note" id="fxnote"></span><span class="spacer"></span>${isNew ? '' : '<button class="ghost danger" id="fxdel">Delete fixture</button>'}</div>`;
+  d.oninput = d.onchange = () => { pending = true; $('#fxnote').textContent = isNew ? '' : 'Not applied yet'; };
+  const opt = id => { const v = $('#' + id).value; return v === '' ? 255 : +v; };
+  const body = () => ({ date: $('#fx_date').value, type: +$('#fx_type').value, home: +$('#fx_home').value, away: +$('#fx_away').value,
+    ground: +$('#fx_ground').value, day_night: $('#fx_dn').checked, round: opt('fx_round'), out_of: opt('fx_out_of'), tt: opt('fx_tt') });
+  const after = async sel => {
+    pending = false; setDirty(true);
+    FX = { ...(await api('fixtures/' + encodeURIComponent(FLIST.file))), redraw: FX.redraw };
+    FLIST.sel = sel; FX.redraw();
+    if (sel !== null) showFixture(sel); else d.innerHTML = '<div class="empty">Select a fixture</div>';
+  };
+  $('#fxapply').onclick = () => applying($('#fxapply'), async () => {
+    if (isNew) { const r = await api('fixtures/' + encodeURIComponent(FLIST.file), { method: 'POST', body: JSON.stringify(body()) }); await after(r.index); }
+    else { await api(`fixtures/${encodeURIComponent(FLIST.file)}/${i}`, { method: 'PUT', body: JSON.stringify(body()) }); await after(i); }
+  }, isNew ? 'Added' : 'Applied');
+  if (isNew) return;
+  $('#fxrevert').onclick = () => showFixture(i);
+  $('#fxcopy').onclick = () => applying($('#fxcopy'), async () => {
+    const r = await api('fixtures/' + encodeURIComponent(FLIST.file), { method: 'POST', body: JSON.stringify(body()) }); await after(r.index);
+  }, 'Duplicated');
+  $('#fxdel').onclick = async () => {
+    if (!window.confirm(`Delete ${sideName(f, 'home')} v ${sideName(f, 'away')} on ${fmtDate(f.date)}?`)) return;
+    try { await api(`fixtures/${encodeURIComponent(FLIST.file)}/${i}`, { method: 'DELETE' }); await after(null); toast('✓ Deleted — remember to save to game files', 'ok'); }
+    catch (e) { toast('Not deleted: ' + e.message, 'err'); }
+  };
+}
+
+function showFixtureKey() {
+  pending = false;
+  const d = $('#fxdetail');
+  const groups = {};
+  FX.slots.forEach(s => (groups[s.group] = groups[s.group] || []).push(s));
+  const used = slot => FX.fixtures.filter(f => f.home === slot || f.away === slot).length;
+  d.innerHTML = `<h2>Fixture key</h2>
+    <div class="meta">${esc(FX.name)} — fixtures name their teams by slot; this table says which team sits in each slot.
+      Swapping two counties' Championship slots moves them between divisions without touching any fixture.</div>
+    ${Object.entries(groups).map(([g, ss]) => `<section class="card"><h3>${esc(g)}</h3><div class="tablewrap"><table>
+      <thead><tr><th>Slot</th><th class="name">Team</th><th>Fixtures</th></tr></thead><tbody>
+      ${ss.map(s => `<tr><td>${s.slot}</td><td class="name"><select data-slot="${s.slot}" style="width:240px">${TEAMS.map(t => `<option value="${t.id}" ${t.id === s.team ? 'selected' : ''}>${esc(t.name)}</option>`).join('')}</select></td><td>${used(s.slot)}</td></tr>`).join('')}
+      </tbody></table></div></section>`).join('')}
+    <div class="actions actionbar"><button class="primary" id="keyapply">Apply changes</button><button class="ghost" id="keyrevert">Revert</button><span class="note" id="keynote"></span></div>`;
+  d.oninput = d.onchange = () => { pending = true; $('#keynote').textContent = 'Not applied yet'; };
+  $('#keyrevert').onclick = showFixtureKey;
+  $('#keyapply').onclick = () => applying($('#keyapply'), async () => {
+    const body = {};
+    d.querySelectorAll('[data-slot]').forEach(s => { const cur = FX.slots.find(x => x.slot === +s.dataset.slot); if (cur.team !== +s.value) body[s.dataset.slot] = +s.value; });
+    await api(`fixtures/${encodeURIComponent(FLIST.file)}/keys`, { method: 'PUT', body: JSON.stringify(body) });
+    pending = false; setDirty(true);
+    FX = { ...(await api('fixtures/' + encodeURIComponent(FLIST.file))), redraw: FX.redraw };
+    FX.redraw(); showFixtureKey();
+  });
+}
+
+window.onbeforeunload = e => { if (!$('#save').disabled || pending) { e.preventDefault(); e.returnValue = ''; } };
+boot().catch(e => { $('#main').innerHTML = `<div class="empty">Could not load: ${esc(e.message)}</div>`; });
+</script>
+</body>
+</html>
