@@ -3,7 +3,7 @@
 <h2>How to use ICC Editor</h2>
 <p class="meta">An unofficial, fan-made editor for the databases of <b>International Cricket Captain</b> (1998),
 <b>Australian Cricket Captain</b> (1998), <b>International Cricket Captain 2</b> (1999), <b>ICC 2000</b>, <b>ICC 2001</b>,
-<b>ICC 2002</b> and <b>ICC 2006</b>. It edits the game's own
+<b>ICC 2002</b>, <b>ICC 2005</b> and <b>ICC 2006</b>. It edits the game's own
 files and keeps a backup every time you save.</p>
 
 <nav class="toc">
@@ -25,6 +25,7 @@ files and keeps a backup every time you save.</p>
       <li>ICC 1998 and Australian Cricket Captain: <code>database.db</code> plus their <code>*.fxt</code> fixture files</li>
       <li>ICC 2: <code>database.db</code></li>
       <li>ICC 2000 / 2001 / 2002: <code>dataT.db</code> (players) and <code>DataP.db</code> (teams), plus the <code>*.fxt</code> fixture files</li>
+      <li>ICC 2005: <code>dataT.db</code> and <code>dataP.db</code> plus the <code>Fxt</code> folder</li>
       <li>ICC 2006: <code>Data\dataT.db</code>, <code>Data\dataP.db</code> and the <code>Fxt</code> folder</li>
     </ul></li>
   <li>Make your changes, press <b>Apply changes</b> on each page, then <b>Save to game files</b> (top right).</li>
@@ -64,11 +65,11 @@ editor. Both warn you first if you have changes that are not saved.</p>
 </ul>
 </section>
 
-<section class="card" id="h-fixtures"><h3>Fixtures (ICC 1998, Australian Cricket Captain, ICC 2000, 2001, 2002, 2006)</h3>
+<section class="card" id="h-fixtures"><h3>Fixtures (ICC 1998, Australian Cricket Captain, ICC 2000, 2001, 2002, 2005, 2006)</h3>
 <ul>
   <li>Pick a fixture file at the top of the list. ICC 2000/2001/2002: <code>fix1</code> = first season, <code>fixX</code> = later seasons,
     <code>int1</code>/<code>intX</code> = the same seasons' international fixtures only, <code>wc</code> = World Cup, <code>sc*</code> = historical scenarios.
-    ICC 2006 has one file per season (<code>fix06</code>, <code>int06</code>…). ICC 1998: <code>eng98</code>. Australian Cricket Captain:
+    ICC 2005 and 2006 have one file per season (<code>fix05</code>, <code>int05</code>…). ICC 1998: <code>eng98</code>. Australian Cricket Captain:
     <code>aus1998</code> = first season, <code>ausX</code> = later seasons (its seasons run from October).</li>
   <li><b>ICC 1998 and Australian Cricket Captain</b> name domestic sides directly, so the Fixture key only lists the international
     rotation slots. ICC 1998 fixtures have no venue or day/night setting (the game always uses the home side's ground).
@@ -103,21 +104,21 @@ editor. Both warn you first if you have changes that are not saved.</p>
 
 <section class="card" id="h-versions"><h3>Game versions</h3>
 <div class="tablewrap"><table class="plain">
-  <thead><tr><th></th><th>ICC 1998 / Australian Cricket Captain</th><th>ICC 2 (1999)</th><th>ICC 2000 / 2001 / 2002</th><th>ICC 2006</th></tr></thead>
+  <thead><tr><th></th><th>ICC 1998 / Australian Cricket Captain</th><th>ICC 2 (1999)</th><th>ICC 2000 / 2001 / 2002</th><th>ICC 2005</th><th>ICC 2006</th></tr></thead>
   <tbody>
-    <tr><td>Files</td><td>one database.db</td><td>one database.db</td><td>dataT.db + DataP.db + fixtures</td><td>Data\ + Fxt\</td></tr>
-    <tr><td>Abilities</td><td>decimal values</td><td>decimal values</td><td>sliders (fixed steps)</td><td>exact decimal values</td></tr>
-    <tr><td>Nationalities</td><td>any national side</td><td>any national side</td><td>Test nations + a few Associates (2002 adds Namibia, Canada, Netherlands)</td><td>any national side</td></tr>
-    <tr><td>Career records</td><td>10 types (ACC: 13, adding Second XI)</td><td>16 types</td><td>18 types</td><td>24 types, including Twenty20</td></tr>
-    <tr><td>Club records</td><td>none</td><td>editable</td><td>editable</td><td>editable</td></tr>
-    <tr><td>Fixtures</td><td>editable</td><td>built into the game</td><td>editable</td><td>editable, one file per season</td></tr>
+    <tr><td>Files</td><td>one database.db</td><td>one database.db</td><td>dataT.db + DataP.db + fixtures</td><td>dataT.db + dataP.db + Fxt\</td><td>Data\ + Fxt\</td></tr>
+    <tr><td>Abilities</td><td>decimal values</td><td>decimal values</td><td>sliders (fixed steps)</td><td>exact decimal values</td><td>exact decimal values</td></tr>
+    <tr><td>Nationalities</td><td>any national side</td><td>any national side</td><td>Test nations + a few Associates (2002 adds Namibia, Canada, Netherlands)</td><td>any national side</td><td>any national side</td></tr>
+    <tr><td>Career records</td><td>10 types (ACC: 13, adding Second XI)</td><td>16 types</td><td>18 types</td><td>18 types</td><td>24 types, including Twenty20</td></tr>
+    <tr><td>Club records</td><td>none</td><td>editable</td><td>editable</td><td>editable</td><td>editable</td></tr>
+    <tr><td>Fixtures</td><td>editable</td><td>built into the game</td><td>editable</td><td>editable, one file per season</td><td>editable, one file per season</td></tr>
   </tbody></table></div>
 </section>
 
 <section class="card" id="h-limits"><h3>Game limits worth knowing</h3>
 <ul>
   <li><b>Only Test nations can play Tests, ODIs and triangular series.</b> The game has them built in (ICC 2000/2001/2002: the nine
-    Test nations; ICC 2006 adds Bangladesh). Kenya, Scotland, Ireland and the other Associates can only appear in World Cup
+    Test nations; ICC 2005 and 2006 add Bangladesh). Kenya, Scotland, Ireland and the other Associates can only appear in World Cup
     fixtures; anything else crashes when the match starts. The editor blocks such fixtures.</li>
   <li><b>Every home side needs a ground.</b> Most Associates have no grounds in the database, so a fixture with one of them at
     home needs an explicit venue. The editor flags these fixtures in the list.</li>

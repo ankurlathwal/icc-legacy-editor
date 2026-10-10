@@ -1,2 +1,2 @@
 """ICC database editor (web UI)."""
-__version__ = '1.3'
+__version__ = '1.4'

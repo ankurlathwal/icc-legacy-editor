@@ -1,4 +1,4 @@
-"""Fixture files (*.fxt) of ICC 2000 / 2002 / 2006.
+"""Fixture files (*.fxt) of ICC 2000 / 2002 / 2005 / 2006.
 
 Reverse-engineered from CrickMan.dll (`CrEventList::serializeFixtures`, `CrDay::Serialize`,
 `CrFixture::Serialize`, `CrResult::Serialize`) and CrTypes.dll (`CrMatchType`). The files are
@@ -7,13 +7,18 @@ plain (unencrypted) MFC CArchive streams:
 - 365 CrDay: WORD day number, DWORD count, then `count` CrFixture objects. A fixture is
   written in full the first time and as an object reference on each later day it spans
   (4 days for a County Championship match, 5 for a Test...).
-- the fixture key: 300 WORDs (305 in ICC 2006) mapping a key slot to a team id of the team
+- the fixture key: 300 WORDs (305 in ICC 2006 from its 2006 season) mapping a key slot to a team id of the team
   file. Fixtures name their teams by key slot, not by team id. Slots 1-18 are the counties
   in championship-division order, 221-238 the National League divisions, 101-128
   international rotation slots; 0xCDCD marks an unused slot.
 - 18 DWORDs (county order), 28x12 DWORDs (international rotation: slot 101+row in each of
   12 years), 5x5 DWORDs (triangular series: key, three teams, ...), then a few trailing values
-  (ICC 2000/2002: year + one DWORD; ICC 2006: 6 DWORDs + 3 WORDs).
+  (ICC 2000/2002: year + one DWORD; ICC 2005/2006: 6 DWORDs + 3 WORDs).
+
+Cricket Captain 2005 files have the ICC 2006 layout (300-slot key) but their own match-type
+table (no International T20, so types 12/13 differ). The layout alone cannot tell a 2005 file
+from one of ICC 2006's 2005-season files, so parse() takes the game as a hint and otherwise
+picks the table that matches the day spans.
 
 Day 0 is 31 March of the season's year, so day 1 = 1 April and day 270 = 26 December.
 Team values of 850+ / 900+ in a fixture are knockout placeholders (e.g. World Cup
@@ -68,6 +73,25 @@ MATCH_TYPES_2006 = {
     13: ('One Day Match', 1),
     14: ('First Class Match', 4),
 }
+# Cricket Captain 2005 (CrTypes.dll getMatchTypeString / getNoDays): ICC 2006's list without
+# International T20.
+MATCH_TYPES_2005 = {
+    0: ('County Championship', 4),
+    1: ('National League', 1),
+    2: ('Challenge Trophy', 1),
+    3: ('Twenty20 Cup', 1),
+    4: ('World Cup', 1),
+    5: ('ODI Tournament', 1),
+    6: ('Test Match', 5),
+    7: ('One Day International', 1),
+    8: ('Three Day Friendly', 3),
+    9: ('One Day Friendly', 1),
+    10: ('Second XI', 4),
+    11: ('University Match', 3),
+    12: ('One Day Match', 1),
+    13: ('First Class Match', 4),
+}
+MATCH_TYPES = {'classic': MATCH_TYPES_CLASSIC, '2006': MATCH_TYPES_2006, '2005': MATCH_TYPES_2005}
 
 # Result block of an unplayed fixture (status word, 4 null objects, uninitialised fields).
 BLANK_RESULT = bytes.fromhex('3477' + '0000' * 4 + 'cd' * 8 + '00' + 'cd' * 4)
@@ -96,13 +120,13 @@ class FixtureFile:
     rotation: list           # 28 x 12 DWORDs
     tournaments: list        # 5 x 5 DWORDs
     tail: bytes              # trailing values, kept raw
-    fmt: str                 # 'classic' (2000/2002) or '2006'
+    fmt: str                 # 'classic' (2000/2002), '2005' or '2006'
     schema: int = 1
     path: Path = None
 
     @property
     def match_types(self):
-        return MATCH_TYPES_2006 if self.fmt == '2006' else MATCH_TYPES_CLASSIC
+        return MATCH_TYPES[self.fmt]
 
     @property
     def year(self):
@@ -153,7 +177,9 @@ def _read_fixture(r):
     return Fixture(mt[0], mt[1], mt[2], mt[3], mt[4], result, home, away, ground, start, flag)
 
 
-def parse(data):
+def parse(data, fmt=None):
+    """Parse a fixture file. `fmt` ('2005' / '2006') says which game it belongs to when the
+    layout is shared; without it the match-type table that fits the day spans is used."""
     r = Reader(data)
     objects = [None]          # MFC shared class/object index space, 1-based
     created = []
@@ -188,11 +214,12 @@ def parse(data):
     # Tail: keys + 18 + 336 + 25 DWORDs + 8 bytes (2000/2002) or + 30 bytes (2006).
     tables = (18 + 336 + 25) * 4
     if rest == 300 * 2 + tables + 8:
-        fmt, nkeys = 'classic', 300
+        fmts, nkeys = ['classic'], 300
     elif rest == 305 * 2 + tables + 30:
-        fmt, nkeys = '2006', 305
+        fmts, nkeys = ['2006'], 305
     elif rest == 300 * 2 + tables + 30:
-        fmt, nkeys = '2006', 300      # ICC 2006's 2005 files predate the 305-slot key
+        # Cricket Captain 2005, or ICC 2006's 2005 files (which predate the 305-slot key)
+        fmts, nkeys = (['2005', '2006'] if fmt == '2005' else ['2006', '2005']), 300
     else:
         raise ValueError('unrecognised fixture file tail (%d bytes)' % rest)
     keys = [r.word() for _ in range(nkeys)]
@@ -201,12 +228,16 @@ def parse(data):
     tournaments = [r.dword() for _ in range(25)]
     tail = r.raw(len(data) - r.pos)
 
-    ff = FixtureFile(_order(created, days), keys, county_order, rotation, tournaments, tail, fmt, schema)
-    for d, refs in enumerate(days):
-        expect = [f for f in ff.fixtures if f.start <= d < f.start + ff.days_of(f)]
-        if [id(f) for f in refs] != [id(f) for f in expect]:
-            raise ValueError('day %d does not match its fixtures\' spans' % d)
-    return ff
+    order = _order(created, days)
+    for i, fmt in enumerate(fmts):
+        ff = FixtureFile(order, keys, county_order, rotation, tournaments, tail, fmt, schema)
+        bad = next((d for d, refs in enumerate(days)
+                    if [id(f) for f in refs] !=
+                    [id(f) for f in ff.fixtures if f.start <= d < f.start + ff.days_of(f)]), None)
+        if bad is None:
+            return ff
+        if i == len(fmts) - 1:
+            raise ValueError('day %d does not match its fixtures\' spans' % bad)
 
 
 def _order(created, days):
@@ -235,8 +266,8 @@ def _order(created, days):
     return out
 
 
-def load(path):
-    ff = parse(Path(path).read_bytes())
+def load(path, fmt=None):
+    ff = parse(Path(path).read_bytes(), fmt)
     ff.path = Path(path)
     return ff
 

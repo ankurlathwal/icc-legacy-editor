@@ -62,7 +62,8 @@ class Store(FixtureStoreMixin):
         fx_dir = find_fixture_dir(fixtures) if fixtures else find_fixture_dir(self.players_path.parent)
         if fixtures and fx_dir is None:
             raise SystemExit('no .fxt files in %s' % fixtures)
-        self.fx = FixtureSet(fx_dir) if fx_dir else None
+        game_hint = '2005' if self.pf.fmt is playerfile.FORMAT_2005 else None
+        self.fx = FixtureSet(fx_dir, game_hint) if fx_dir else None
         if game:
             self.pf.game_version = game
         elif self.pf.game_version == 2000 and fx_dir and _first_season(fx_dir) == 2001:
@@ -386,7 +387,7 @@ def meta_record_owners():
 
 
 def editable_fields(pf):
-    """Bitfields the editor exposes. Nationality has its own control; ICC 2006 keeps
+    """Bitfields the editor exposes. Nationality has its own control; ICC 2005 / 2006 keep
     batting/bowling as decimals, so their old packed bits are left untouched."""
     skip = {'national_team'}
     if pf.fmt.float_abilities:
@@ -600,7 +601,7 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description='ICC database editor')
     ap.add_argument('--players', help='player file (dataT.db); default Original DB/2002/dataT.db')
     ap.add_argument('--teams', help='team file (dataP.db); default Original DB/2002/dataP.db')
-    ap.add_argument('--game', type=int, choices=sorted(playerfile.NATIONAL_TABLES) + [2006],
+    ap.add_argument('--game', type=int, choices=sorted(playerfile.NATIONAL_TABLES) + [2005, 2006],
                     help='game release (default: detected from the database)')
     ap.add_argument('--database', help='ICC 1998, ICC 2 (1999) or Australian Cricket Captain database.db - '
                                        'edits that single file instead')

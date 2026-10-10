@@ -1,5 +1,5 @@
 # Project Summary
-Decode the database files of the old game International Cricket Captain (ICC 1998, ICC 2 (1999), 2000, 2001, 2002, 2006,
+Decode the database files of the old game International Cricket Captain (ICC 1998, ICC 2 (1999), 2000, 2001, 2002, 2005, 2006,
 plus Australian Cricket Captain (1998)) and provide a visual editor that saves back into the game's own format, so edited databases can be played in the game.
 
 # The database files
@@ -11,10 +11,11 @@ What is in the repo:
 - `Original DB/` — the working databases (edit these; `.bak-*` backups are git-ignored):
   - `Original DB/2002/` — clean ICC 2002 release pair (the editor's CLI default) + its `.fxt` files.
   - `Original DB/2000/` — ICC 2000 pair, edited by the user (Sehwag, Yuvraj Singh added; roles/names fixed) and verified in-game, + `.fxt`.
+  - `Original DB/2005/` — ICC 2005 pair + `Fxt/` (one fixture file per season 2005–2024, `mp.fxt`, `sc1-5`, `wc`).
   - `Original DB/2006/` — ICC 2006 pair (edits verified in-game) + `Fxt/` (one fixture file per season 2005–2025).
   - `Original DB/1999/database.db` — ICC 2 (1999), a single unencrypted file (edits verified in-game). ICC 2 has no fixture files.
 - The game installs are NOT in the repo (copyright/size). On the user's Windows PC they are under `C:\ICC\` (`1998`, `1999`, `2000`,
-  `2001`, `2002`, `2006`, `Australian Cricket Captain`). `C:\ICC\2002` is the Mac copy: its `DataP.db` is the
+  `2001`, `2002`, `2005`, `2006`, `Australian Cricket Captain`). `C:\ICC\2002` is the Mac copy: its `DataP.db` is the
   text-editor-damaged one (decrypted payload starts with `EF BF BD`) and its `dataT.db` the "2005 update"; use `Original DB/2002/`. Their DLLs are the reference for the file format:
   `CrManAndEng.dll`, `CrTypes.dll`, `CrickMan.dll`, `Global.dll` (ICC 2: `CrickMan.dll` + `CrTypes.dll`). Paths written below
   as `ICC 2000/...`, `ICC 2006/...`, `ICC2/...` mean "inside that game's install folder".
@@ -41,6 +42,14 @@ Known-bad / special files (seen in the user's ICC 2002 install on the Mac; check
   - 24 career-record types (T20 added, Net records moved to 22/23); mask = BYTE + two WORDs (`Format.mask_words`);
   - `CrPlayer` adds DWORD England-contracted + batting as a double (x4096 = CrFixed); `CrBowler` adds bowling as a double; the old 9-bit batting/bowling bits are kept raw but unused;
   - `CrTestHistory` is 160 bytes (10 Test nations). Team file (`dataP`) layout is unchanged.
+- ICC 2005 ("International Cricket Captain 2005", MFC42 build) — `playerfile.FORMAT_2005`: the 2006 player file
+  (seed + length encryption, national id DWORD, England contract, batting/bowling doubles, 160-byte Test history) but the
+  classic 18 record types and BYTE + one WORD record mask (no T20 records). `dataP.db` = classic team file.
+  Files sit in the game folder root with fixtures in `Fxt\`. Test nations 43–52 (Bangladesh included).
+  Fixtures: 2006 layout with a 300-slot key (as 2006's own 2005-season files), venue = ground id, but 14 match types
+  (`fixturefile.MATCH_TYPES_2005`: 2006's without International T20, so 12 = One Day Match, 13 = First Class Match 4 days).
+  A 2005 file and a 2006 2005-season file can be byte-identical, so `fixturefile.parse(data, fmt)` takes a hint
+  (`server.Store` passes '2005' for a 2005 player file); without one it picks the table whose spans fit (`mp.fxt` needs 2005).
 - ICC 2 (1999) — `icc/icc2file.py`, from `ICC2/CrickMan.dll` + `CrTypes.dll` (MFC42, no `Global.dll`, no encryption):
   - one `database.db`: CrTeamNames, then CrDbase of CrBowler (players), CrCoach, CrGround, CrTeam; each CrDbase = CMapWordToOb + sorted WORD key array + 2 WORDs (player DB adds 3 WORD arrays);
   - abilities are unpacked 32-bit floats (names from getters, see `icc2file.FIELDS`); fixed 16/16/15 bat/bowl/field record blocks, each in its own slot order (`BAT_ORDER`/`BOWL_ORDER`/`FIELD_ORDER` → `RECORD_TYPES`), accessed via `get_record`/`set_record`; coaches are full CrPerson;
@@ -197,7 +206,7 @@ Known-bad / special files (seen in the user's ICC 2002 install on the Mac; check
 - After browser checks, close test tabs; clear `window.onbeforeunload` first or closing hangs on "Leave site?".
 - Edited databases have been verified in the real game for ICC 2 (1999), ICC 2000 (including newly added players) and
   ICC 2006. ICC 2002 shares the 2000 layout but has not been tested in-game separately.
-  ICC 1998, ICC 2001 and Australian Cricket Captain edits have NOT been tested in-game yet.
+  ICC 1998, ICC 2001, ICC 2005 and Australian Cricket Captain edits have NOT been tested in-game yet.
 - The user runs the in-game tests (on Windows); never claim an in-game result that the user hasn't reported.
 - Rebuild the Windows package (`python tools/build_windows.py`) after editor changes; the user shares it with the community.
 

@@ -1,7 +1,7 @@
 # ICC Database Editor
 
-An editor for the player and team databases of **International Cricket Captain (1998), ICC 2 (1999), 2000, 2001, 2002
-and 2006**, and of **Australian Cricket Captain (1998)**. It reads the game's encrypted `.db` files directly and saves them back in the same format, so edited databases work in the game.
+An editor for the player and team databases of **International Cricket Captain (1998), ICC 2 (1999), 2000, 2001, 2002,
+2005 and 2006**, and of **Australian Cricket Captain (1998)**. It reads the game's encrypted `.db` files directly and saves them back in the same format, so edited databases work in the game.
 
 Needs Python 3.8+ only. Nothing to install.
 
@@ -18,7 +18,7 @@ game's own files (keeping `.bak-<date-time>` copies on every save).
   WebKit (Safari's engine) and the Mac's own `python3`. Quit with ⌘Q or by closing the window; it warns about unsaved changes.
 
 The **Help** button opens a full how-to guide inside the app. On the start screen, click **Choose game folder…** (or pick a recent one). The editor finds `database.db`
-(ICC 2), `dataT.db` + `DataP.db` + `*.fxt` (ICC 2000 / 2002) or `Data\` + `Fxt\` (ICC 2006).
+(ICC 2), `dataT.db` + `DataP.db` + `*.fxt` (ICC 2000 / 2002), `dataT.db` + `dataP.db` + `Fxt\` (ICC 2005) or `Data\` + `Fxt\` (ICC 2006).
 **Open another game** in the header switches games. Close the game itself before saving.
 
 Rebuild the packages after changing the editor: `python3 tools/build_windows.py` (bundles the official
@@ -55,7 +55,7 @@ python3 -m icc.editor --database "Original DB/1999/database.db"
 | `--players PATH` | player file, `dataT.db` |
 | `--teams PATH` | team file, `dataP.db` (use the one that came with the player file) |
 | `--database PATH` | ICC 2 (1999) single-file `database.db` (instead of `--players`/`--teams`) |
-| `--game 2000\|2002\|2006` | game version; normally detected automatically |
+| `--game 2000\|2002\|2005\|2006` | game version; normally detected automatically |
 | `--port N` | web port (default 8002) |
 | `--no-browser` | don't open a browser tab |
 
@@ -69,11 +69,11 @@ Stop the editor with **Ctrl+C** in the terminal. After updating the code, restar
   - **Delete player** also removes them from every squad and picked XI; their place in the XI is filled automatically.
 - **Teams**: names; the squad; the picked XI (batting order, captain, keeper, opening bowlers); and club details such as founded year, colour and budgets.
 - **Grounds** and **Club records**: ground descriptions and each club's record book.
-- **Fixtures** (ICC 2000, 2002 and 2006): shown when `.fxt` fixture files sit next to the databases (ICC 2006: in an `Fxt` folder), or with `--fixtures <folder>`. Pick a file (e.g. `fix1.fxt` = first season, `fixX.fxt` = later seasons, `wc.fxt` = World Cup, `sc*.fxt` = scenarios; ICC 2006 has one per season), then:
+- **Fixtures** (ICC 2000, 2002, 2005 and 2006): shown when `.fxt` fixture files sit next to the databases (ICC 2005 / 2006: in an `Fxt` folder), or with `--fixtures <folder>`. Pick a file (e.g. `fix1.fxt` = first season, `fixX.fxt` = later seasons, `wc.fxt` = World Cup, `sc*.fxt` = scenarios; ICC 2005 and 2006 have one per season), then:
   - browse by month, search by team, filter by competition; each fixture shows the ground the game will use;
   - change the date, competition, home/away side, venue, day/night, round or series number; add, duplicate or delete fixtures;
   - **Fixture key**: teams are placed in numbered slots (Championship divisions, National League divisions, international rotation). Swapping two counties' slots moves them between divisions without touching any fixture.
-  - Changed fixture files are saved with the databases and get `.bak-<date-time>` copies too. Copy them into the game folder (ICC 2006: `Fxt\`) to play them.
+  - Changed fixture files are saved with the databases and get `.bak-<date-time>` copies too. Copy them into the game folder (ICC 2005 / 2006: `Fxt\`) to play them.
 
 Every **Apply** shows "Applying…" and then a green "✓ Applied" confirmation. Changes are held in the editor until you
 press **Save to game files** (top right). **Quit** (top right) closes the editor and warns first if anything is unsaved. Saving:
@@ -82,15 +82,15 @@ press **Save to game files** (top right). **Quit** (top right) closes the editor
 3. writes the new files, then re-reads them from disk as a final check.
 
 ### Differences between versions
-| | ICC 1998 / Australian Cricket Captain | ICC 2 (1999) | ICC 2000 / 2001 / 2002 | ICC 2006 |
-|---|---|---|---|---|
-| Files | one `database.db` (not encrypted) | one `database.db` (not encrypted) | `dataT.db` + `dataP.db` | `dataT.db` + `dataP.db` |
-| Batting / bowling ability | decimal values | decimal values | slider (fixed steps) | exact decimal value |
-| Nationality | any national side | any national side | 2000/2001: Test nations + Scotland/Kenya/Bangladesh; 2002 adds Namibia, Canada, Netherlands | any national side, including the new Associates |
-| Career records | 10 types (ACC 13, adding Second XI) | 16 types (batting, bowling, fielding) | 18 types | 24 types, adding six Twenty20 records |
-| Club records | none | inside each team: first-class and one-day books | team file | team file |
-| Fixtures | editable (`eng98.fxt`; ACC `aus1998.fxt`, `ausX.fxt`) | built into the game (text resources in `Cricket2.exe`) | editable | editable |
-| Extra | — | full player names | — | "England central contract" tick box |
+| | ICC 1998 / Australian Cricket Captain | ICC 2 (1999) | ICC 2000 / 2001 / 2002 | ICC 2005 | ICC 2006 |
+|---|---|---|---|---|---|
+| Files | one `database.db` (not encrypted) | one `database.db` (not encrypted) | `dataT.db` + `dataP.db` | `dataT.db` + `dataP.db` | `dataT.db` + `dataP.db` |
+| Batting / bowling ability | decimal values | decimal values | slider (fixed steps) | exact decimal value | exact decimal value |
+| Nationality | any national side | any national side | 2000/2001: Test nations + Scotland/Kenya/Bangladesh; 2002 adds Namibia, Canada, Netherlands | any national side | any national side, including the new Associates |
+| Career records | 10 types (ACC 13, adding Second XI) | 16 types (batting, bowling, fielding) | 18 types | 18 types | 24 types, adding six Twenty20 records |
+| Club records | none | inside each team: first-class and one-day books | team file | team file | team file |
+| Fixtures | editable (`eng98.fxt`; ACC `aus1998.fxt`, `ausX.fxt`) | built into the game (text resources in `Cricket2.exe`) | editable | editable | editable |
+| Extra | — | full player names | — | "England central contract" tick box | "England central contract" tick box |
 
 ### Tips
 - **Batting** runs from about 5 to 130, and higher is better. **Bowling** runs from about 27 to 130, and **lower is better**, like a bowling average.
@@ -104,7 +104,7 @@ Decrypt and re-encrypt a file, like the old community `convdb.exe`:
 ```sh
 python3 -m icc.convdb -d dataT.db dataT.db1               # decrypt (any version, detected)
 python3 -m icc.convdb -e dataT.db1 dataT.db               # encrypt for ICC 2000 / 2002
-python3 -m icc.convdb -e dataT.db1 dataT.db --game 2006   # encrypt for ICC 2006
+python3 -m icc.convdb -e dataT.db1 dataT.db --game 2006   # encrypt for ICC 2006 (same for 2005)
 ```
 
 Or use the Python modules directly:
@@ -126,10 +126,10 @@ icc/archive.py      MFC CArchive reader/writer
 icc/playerfile.py   dataT.db: players, career records, squads, coaches
 icc/teamfile.py     dataP.db: team names, grounds, club records
 icc/icc2file.py     ICC 2 (1999) database.db: everything in one file
-icc/fixturefile.py  *.fxt fixture files (ICC 2000 / 2002 / 2006)
+icc/fixturefile.py  *.fxt fixture files (ICC 2000 / 2002 / 2005 / 2006)
 icc/convdb.py       command-line decrypt/encrypt
 icc/editor/         the web editor
-Original DB/        databases to edit (1999, 2000, 2002, 2006)
+Original DB/        databases to edit (1999, 2000, 2002, 2005, 2006)
 ICC2/, ICC 2000/, ICC 2002/, ICC 2006/  game installs (reference only)
 ```
 

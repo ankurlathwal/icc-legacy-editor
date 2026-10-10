@@ -1,4 +1,4 @@
-"""Fixture (*.fxt) editing for the web editor (ICC 2000 / 2001 / 2002 / 2006 via fixturefile; ICC 1998 and
+"""Fixture (*.fxt) editing for the web editor (ICC 2000 / 2001 / 2002 / 2005 / 2006 via fixturefile; ICC 1998 and
 Australian Cricket Captain via fixture1file, which offers the same interface)."""
 import datetime
 import os
@@ -38,20 +38,23 @@ def slot_group(slot):
 ENGLAND = 44   # team id the game hard-codes for neutral finals (played at its 2nd ground, Lord's)
 
 # CrTeam::isTestTeam hard-codes the Test nations as team ids 43..51 (ICC 2000/2002: 9 sides) or 43..52
-# (ICC 2006 adds Bangladesh as 52). Internationals involving anyone else crash at match start
+# (ICC 2005 / 2006 add Bangladesh as 52). Internationals involving anyone else crash at match start
 # ("an invalid argument was encountered"); Associates only appear in World Cup fixtures.
 # ICC 1998 / ACC (fixture1file) use the same editor codes; the same limit is assumed there.
-INTERNATIONAL_TYPES = {'classic': {5, 6, 7}, '2006': {5, 6, 7, 12}, '1998': {6, 7}, 'acc': {5, 6, 7}}
+INTERNATIONAL_TYPES = {'classic': {5, 6, 7}, '2005': {5, 6, 7}, '2006': {5, 6, 7, 12}, '1998': {6, 7},
+                       'acc': {5, 6, 7}}
+GROUND_ID_FORMATS = ('2005', '2006')   # fixture venue field holds a ground id (else a team id)
 
 
 def _module(ff):
     return fixture1file if isinstance(ff, fixture1file.FixtureFile) else fixturefile
 
 
-def load_fixture_file(path):
-    """An ICC 2000-2006 fixture file, or failing that an ICC 1998 / ACC one."""
+def load_fixture_file(path, game=None):
+    """An ICC 2000-2006 fixture file, or failing that an ICC 1998 / ACC one. `game` = '2005' marks
+    Cricket Captain 2005 files (same layout as some ICC 2006 ones, different match types)."""
     try:
-        return fixturefile.load(path)
+        return fixturefile.load(path, game)
     except (ValueError, EOFError) as e:
         try:
             return fixture1file.load(path)
@@ -60,7 +63,7 @@ def load_fixture_file(path):
 
 
 def test_nations(ff):
-    return range(43, 53) if ff.fmt == '2006' else range(43, 52)
+    return range(43, 53) if ff.fmt in ('2005', '2006') else range(43, 52)
 
 
 def check_international(ff, f):
@@ -82,13 +85,13 @@ def resolve_venue(ff, f, info):
     """Ground name the game will use, following CrEventList::getGround.
 
     ICC 2000/2002 store a team id in the fixture's ground field (play at that team's ground);
-    ICC 2006 stores a ground id. Otherwise the home side's grounds are used: the Nth match of
+    ICC 2005 / 2006 store a ground id. Otherwise the home side's grounds are used: the Nth match of
     a Test series at its Nth ground, domestic cup finals at Lord's.
     """
     grounds, test_nations = info['team_grounds'], info['tests']
-    if ff.fmt == '2006' and f.ground:
+    if ff.fmt in GROUND_ID_FORMATS and f.ground:
         return info['grounds'].get(f.ground, '#%d' % f.ground)
-    tid = (f.ground if ff.fmt != '2006' else 0) or ff.team_id(f.home)
+    tid = (f.ground if ff.fmt not in GROUND_ID_FORMATS else 0) or ff.team_id(f.home)
     if tid is None:
         return None
     lst = grounds.get(tid) or []
@@ -108,9 +111,9 @@ def resolve_venue(ff, f, info):
 
 
 class FixtureSet:
-    def __init__(self, folder):
+    def __init__(self, folder, game=None):
         self.folder = Path(folder)
-        self.files = {p.name: load_fixture_file(p)
+        self.files = {p.name: load_fixture_file(p, game)
                       for p in sorted(self.folder.glob('*.fxt'), key=lambda p: p.name.lower())}
         self.dirty = set()
 
@@ -160,9 +163,9 @@ class FixtureSet:
             'season_start': ff.date_of(1).isoformat(), 'season_end': ff.date_of(mod.DAYS_PER_FILE - 1).isoformat(),
             'match_types': {str(k): {'name': v[0], 'days': v[1]} for k, v in ff.match_types.items()},
             'slots': slots, 'key_size': len(ff.keys),
-            # what the venue field holds: a team id (play at its ground) or, in ICC 2006, a ground id
+            # what the venue field holds: a team id (play at its ground) or, in ICC 2005 / 2006, a ground id
             'venues': ([{'id': g, 'name': n} for g, n in sorted(self.venue_info['grounds'].items(), key=lambda x: x[1])]
-                       if ff.fmt == '2006' else
+                       if ff.fmt in GROUND_ID_FORMATS else
                        [{'id': t, 'name': "%s's ground" % names.get(t, '#%d' % t)
                          + (' (%s)' % gs[0] if gs else '')}
                         for t, gs in sorted(self.venue_info['team_grounds'].items(), key=lambda x: names.get(x[0], ''))]),
@@ -185,7 +188,7 @@ class FixtureSet:
         # Slot 0 and codes past the key (850+ Super Six, 900+ cup draw positions) are
         # placeholders the game fills in as a competition progresses. (ICC 1998 / ACC use unnamed
         # slots as knockout placeholders too, so only the ICC 2000-2006 key is checked.)
-        classic = ff.fmt in ('classic', '2006')
+        classic = ff.fmt in ('classic', '2005', '2006')
         for k in ('home', 'away'):
             slot = getattr(f, k)
             if classic and 0 < slot < len(ff.keys) and ff.team_id(slot) is None:
@@ -259,7 +262,7 @@ class FixtureSet:
             ff = self.files[name]
             mod = _module(ff)
             data = mod.serialize(ff)
-            if mod.serialize(mod.parse(data, ff.fmt) if mod is fixture1file else mod.parse(data)) != data:
+            if mod.serialize(mod.parse(data, ff.fmt)) != data:
                 raise SaveError('re-read check failed for %s' % name)
             out.append((ff.path, data))
         return out

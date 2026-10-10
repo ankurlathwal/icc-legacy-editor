@@ -1,4 +1,4 @@
-"""Parser/serializer for the ICC 2000 / 2002 / 2006 player file (dataT.db).
+"""Parser/serializer for the ICC 2000 / 2002 / 2005 / 2006 player file (dataT.db).
 
 Layout derived from CrManAndEng.dll / CrTypes.dll (CrDatabase::SerializeTemporary):
 
@@ -11,10 +11,11 @@ Each CrBowler is CrPerson + CrPlayer + CrBowler data. Packed ability words are k
 raw so a load/save round trip is byte-exact; the BITFIELDS table describes how to
 read and write individual attributes.
 
-Two on-disk formats exist (see Format): ICC 2000/2002 ("classic") and ICC 2006, which
+Three on-disk formats exist (see Format): ICC 2000/2002 ("classic"), ICC 2006, which
 adds a nationality DWORD, England-contract flag, batting/bowling abilities stored as
 doubles, 24 career-record types (Twenty20) and a larger Test-history block, and seeds
-the encryption differently. load() detects the format.
+the encryption differently, and Cricket Captain 2005, which is the 2006 layout with the
+classic 18 record types. load() detects the format.
 """
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
@@ -55,7 +56,11 @@ CLASSIC = Format('classic', False, tuple(RECORD_TYPES),
                  ((17, 16, 15, 14, 13, 12, 11, 10, 9, 8),), False, False, 144)
 FORMAT_2006 = Format('2006', True, tuple(RECORD_TYPES_2006),
                      ((23, 22, 21, 14, 13, 12, 11, 10, 9, 8), (20, 19, 18, 17, 16, 15)), True, True, 160)
-FORMATS = (CLASSIC, FORMAT_2006)
+# Cricket Captain 2005: 2006 encryption, CrPerson, CrPlayer, CrBowler and Test history,
+# but no Twenty20 yet, so the classic 18 record types and record mask.
+FORMAT_2005 = Format('2005', True, tuple(RECORD_TYPES), CLASSIC.mask_words, True, True, 160)
+FORMATS = (CLASSIC, FORMAT_2006, FORMAT_2005)
+FORMAT_VERSIONS = {FORMAT_2006: 2006, FORMAT_2005: 2005}   # formats used by one release only
 
 # CrPerson national-team nibble -> team id in dataP.db, from each release's
 # CrPerson::getNationalTeamRef. Codes 2-13 are the same in both releases; ICC 2002
@@ -287,7 +292,7 @@ class Player:
     bowler_a: int
     bowler_b: int
     bowler_c: int
-    # ICC 2006 only
+    # ICC 2005 / 2006 only
     national_id: Optional[int] = None       # national team id (replaces the 4-bit code)
     england_contracted: Optional[int] = None
     batting_value: Optional[float] = None   # batting ability, same scale as BITFIELDS 'batting'
@@ -540,8 +545,8 @@ class PlayerFile:
         differ. ICC 2002 databases have national sides for Namibia/Canada/Netherlands and/or
         players using their codes; ICC 2000 databases have neither. ICC 2001 uses ICC 2000's codes,
         so it cannot be told apart from the player file (the editor uses the fixtures' year)."""
-        if self.fmt is FORMAT_2006:
-            return 2006
+        if self.fmt in FORMAT_VERSIONS:
+            return FORMAT_VERSIONS[self.fmt]
         if getattr(self, '_version', None):
             return self._version
         extra = {1, 14, 15}
@@ -552,9 +557,9 @@ class PlayerFile:
 
     @game_version.setter
     def game_version(self, v):
-        if self.fmt is FORMAT_2006:
-            if v != 2006:
-                raise ValueError('this is an ICC 2006 database')
+        if self.fmt in FORMAT_VERSIONS:
+            if v != FORMAT_VERSIONS[self.fmt]:
+                raise ValueError('this is an ICC %d database' % FORMAT_VERSIONS[self.fmt])
             return
         if v not in NATIONAL_TABLES:
             raise ValueError('unsupported game version %r' % v)
@@ -563,7 +568,7 @@ class PlayerFile:
     @property
     def national_teams(self):
         """Nationality choices as {value: team id}. Classic formats store a 4-bit code;
-        ICC 2006 stores the team id itself (any national side, plus ids in use)."""
+        ICC 2005 / 2006 store the team id itself (any national side, plus ids in use)."""
         if self.fmt.nationality_dword:
             ids = {t.name_ref for t in self.teams if t.national}
             ids |= {p.national_id for p in self.players if p.national_id}
@@ -718,7 +723,7 @@ def serialize(pf):
 
 
 def load(path):
-    """Load a player file, detecting its format (ICC 2000/2002 or ICC 2006)."""
+    """Load a player file, detecting its format (ICC 2000/2002, 2005 or 2006)."""
     errors = []
     for fmt in FORMATS:
         try:

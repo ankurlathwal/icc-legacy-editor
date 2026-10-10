@@ -238,7 +238,7 @@ function renderChooser(info) {
   m.innerHTML = `<div class="detail" style="max-width:760px;margin:0 auto;width:100%">
     <h2>Open a game</h2>
     <div class="banner">New here? <a href="#" id="chooserHelp">Read the short guide</a> — it covers everything from opening a game to playing your edits.</div>
-    <div class="meta">Choose an ICC game folder (ICC 1998, Australian Cricket Captain, ICC 2, 2000, 2001, 2002 or 2006) or a folder holding its databases.
+    <div class="meta">Choose an ICC game folder (ICC 1998, Australian Cricket Captain, ICC 2, 2000, 2001, 2002, 2005 or 2006) or a folder holding its databases.
       The editor finds dataT.db / DataP.db (or the single database.db of the older games) and the fixture files by itself.</div>
     <section class="card"><div class="actions" style="margin:0"><button class="primary" id="pick">Choose game folder…</button>
       <span class="note" id="chooserNote"></span></div>
@@ -397,7 +397,7 @@ function fieldInput(f, v) {
     <div class="slider"><input type="range" id="${id}" min="0" max="${f.max}" value="${v}" data-lo="${f.lo}" data-hi="${f.hi}"><input type="number" id="${id}_n" min="0" max="${f.max}" value="${v}"></div></label>`;
 }
 
-// ICC 2006 stores batting / bowling ability as decimals rather than 0..511 steps.
+// ICC 2005 / 2006 store batting / bowling ability as decimals rather than 0..511 steps.
 function floatAbility(group, p) {
   if (!META.float_abilities) return '';
   if (group === 'Batting') return `<label class="f">Batting ability <span class="note">(higher = better)</span><input id="batting_value" type="number" step="0.01" min="0" max="400" value="${p.batting_value}"></label>`;
